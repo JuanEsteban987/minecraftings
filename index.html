@@ -2,13 +2,13 @@
 <html lang="es">
 <head>
 <meta charset="utf-8"/>
-<title>Minecraft RPG Emoji — Hotbar 1-9 + E abre inventario (pausa)</title>
+<title>Minecraft RPG Emoji — Hotbar 1-9 + E abre inventario (pausa) — Drag&Drop + Crafteo</title>
 <style>
   body{margin:0;background:#222;font-family:Arial, sans-serif;overflow:hidden;color:#eee}
   canvas{display:block;background:#87CEEB;}
   #ui{position:fixed;top:10px;left:10px;background:rgba(0,0,0,0.6);color:#fff;padding:10px;border-radius:10px;font-size:14px;z-index:50;}
   /* INVENTARIO (ahora se muestra/oculta con E) */
-  #inventory{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);display:none;gap:8px;background:rgba(0,0,0,0.7);padding:10px;border-radius:10px;z-index:150;max-width:90vw;overflow:auto;}
+  #inventory{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);display:none;gap:8px;background:rgba(0,0,0,0.7);padding:10px;border-radius:10px;z-index:150;max-width:90vw;overflow:auto;flex-wrap:wrap;}
   .slot{width:60px;height:60px;background:#111;border:2px solid #444;border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-size:26px;position:relative;cursor:pointer;user-select:none;margin:2px;}
   .selected{border-color:#ffd86b; box-shadow: 0 0 14px rgba(255,200,90,0.12) inset;}
   .count{position:absolute;bottom:2px;right:6px;font-size:12px;}
@@ -83,6 +83,8 @@
   .world-actions{ display:flex; gap:6px; margin-top:8px; }
 
   .placeholder{ color:#777; font-size:12px; text-align:center; }
+
+  .inv-drop-highlight { outline: 2px dashed rgba(200,200,255,0.18); border-radius:10px; }
 
   @media (max-width:700px){
     #savePanel{right:8px;left:8px;width:auto;}
@@ -211,7 +213,7 @@
 
 <script>
 /* ================= CONFIG & STATE ================= */
-const GAME_VERSION = "1.0.2";
+const GAME_VERSION = "1.0.3-dnd";
 const SAVES_KEY = "mc_rpg_saves";
 const AUTOSAVE_MS = 30000; // 30s
 
@@ -231,6 +233,7 @@ const openSavesBtn = document.getElementById("openSavesBtn");
 const togglePocionesBtn = document.getElementById("togglePocionesBtn");
 const hotbarEl = document.getElementById("hotbar");
 const pauseOverlay = document.getElementById("pauseOverlay");
+const worldSelector = document.getElementById("worldSelector");
 
 canvas.width = innerWidth;
 canvas.height = innerHeight;
@@ -331,7 +334,6 @@ function createNewWorld(seed = null){
 
 /* ---------- Hotbar ---------- */
 function populateHotbarAuto(){
-  // Llena hotbar con hasta 9 items diferentes que el jugador tenga (orden básico)
   const itemsOrder = ["wood","stone","plank","woodBlock","stoneBlock","coal","apple","sword","pickaxe","helmet","chestplate","leggings","boots","iron","gold","mithril","diamond","ruby"];
   let idx = 0;
   hotbar.fill(null);
@@ -341,7 +343,6 @@ function populateHotbarAuto(){
       hotbar[idx++] = id;
     }
   }
-  // si hay espacios vacíos, dejarlos null
   hotbarIndex = 0;
   renderHotbar();
 }
@@ -360,28 +361,61 @@ function renderHotbar(){
       slot.appendChild(icon);
       const cnt = document.createElement("div"); cnt.className = "count"; cnt.textContent = (gameMode === "creative") ? "∞" : (player.inv[id] || 0);
       slot.appendChild(cnt);
+
+      // enable drag from hotbar (to inventory to remove, or elsewhere)
+      slot.draggable = true;
+      slot.ondragstart = (ev) => {
+        try {
+          ev.dataTransfer.setData("text/plain", id);
+          ev.dataTransfer.setData("from", "hotbar:" + i);
+        } catch(e){}
+      };
+    } else {
+      // empty hotbar slot — allow dropping items onto it to set a shortcut
+      slot.classList.add("empty-hot");
     }
+
+    // clicking selects the hotbar item for use/placement
     slot.onclick = ()=> {
       hotbarIndex = i;
-      // seleccionar el item como "selected" para colocación/uso
       selected = hotbar[i];
       renderHotbar();
-      drawInv(); // para resaltar en inventario si corresponde
+      drawInv();
     };
+
+    // allow drops onto hotbar slots to assign shortcuts
+    slot.ondragover = (e) => { e.preventDefault(); slot.classList.add('highlight'); };
+    slot.ondragleave = ()=> slot.classList.remove('highlight');
+    slot.ondrop = (e) => {
+      e.preventDefault(); slot.classList.remove('highlight');
+      const item = e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("item");
+      const from = e.dataTransfer.getData("from") || "";
+      if (!item) return;
+      // Assign a shortcut without removing from inventory (hotbar = pointer)
+      hotbar[i] = item;
+      renderHotbar();
+      // If user dragged from hotbar (rearrange), clear the origin
+      if (from.startsWith("hotbar:")){
+        const idxFrom = parseInt(from.split(":")[1],10);
+        if (!isNaN(idxFrom) && idxFrom !== i) hotbar[idxFrom] = null;
+        renderHotbar();
+      }
+      // If dragged from equip, keep equip as is (hotbar is just a shortcut)
+      // If dragged from inventory, keep the inventory counts unchanged.
+    };
+
     hotbarEl.appendChild(slot);
   }
 }
 
 /* Actualiza la hotbar cuando cambia el inventario (simple heurística) */
 function refreshHotbarOnInvChange(){
-  // Mantener items actuales si aún existen, si no, re-autollenar
   let needFill = false;
   for (let i=0;i<9;i++){
     const id = hotbar[i];
-    if (id && (player.inv[id] || 0) <= 0) { hotbar[i] = null; needFill = true; }
+    if (id && (player.inv[id] || 0) <= 0 && !(gameMode === "creative")) { hotbar[i] = null; needFill = true; }
   }
-  if (needFill){
-    // rellenar con cualquier item disponible
+  if (needFill) {
     const itemsOrder = ["wood","stone","plank","woodBlock","stoneBlock","coal","apple","sword","pickaxe","helmet","chestplate","leggings","boots","iron","gold","mithril","diamond","ruby"];
     for (let i=0;i<9;i++){
       if (!hotbar[i]){
@@ -512,19 +546,42 @@ function unequipSlot(slot){
   refreshHotbarOnInvChange();
 }
 
-/* ---------- Click interactions ---------- */
+/* enableDrop: accept drops on equip slots (from inventory or hotbar) */
+function enableDrop(slotElement, type){
+  slotElement.ondragover = (e)=> { e.preventDefault(); slotElement.classList.add('highlight'); };
+  slotElement.ondragleave = ()=> slotElement.classList.remove('highlight');
+  slotElement.ondrop = (e)=>{
+    e.preventDefault();
+    slotElement.classList.remove('highlight');
+    const item = e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("item");
+    const from = e.dataTransfer.getData("from") || "";
+    if(!item) return;
+    const map = { weapon:["sword","pickaxe"], head:["helmet"], chest:["chestplate"], legs:["leggings"], boots:["boots"] };
+    if(!map[type].includes(item)) return;
+    // swap back currently equipped
+    if(player.equipment[type]) player.inv[player.equipment[type]] = (player.inv[player.equipment[type]]||0)+1;
+    // if coming from inventory, consume one
+    if (!from.startsWith("equip:") && !from.startsWith("hotbar:") && gameMode !== "creative"){
+      if ((player.inv[item]||0) <= 0) return;
+      player.inv[item]--;
+    }
+    // equip
+    player.equipment[type] = item;
+    recalcStats(); drawInv(); drawEquipUI(); refreshHotbarOnInvChange();
+  };
+}
+
+/* ---------- Click interactions (world) ---------- */
 canvas.addEventListener("mousedown", (e) => {
   const rect = canvas.getBoundingClientRect();
   const tx = Math.floor((e.clientX - rect.left + camX)/TILE);
   const ty = Math.floor((e.clientY - rect.top + camY)/TILE);
 
-  // si inventario abierto no permitir interacciones con el mundo
   if (inventoryOpen) return;
 
   if (Math.abs(tx - player.x) > 2 || Math.abs(ty - player.y) > 2) return;
 
   if (e.button === 0){
-    // atacar enemigo en ese tile
     for (let i = enemies.length-1; i>=0; i--){
       if (enemies[i].x === tx && enemies[i].y === ty){
         enemies[i].hp -= player.atk;
@@ -534,7 +591,6 @@ canvas.addEventListener("mousedown", (e) => {
     }
     const tile = world[ty]?.[tx];
     if (!tile) return;
-    // recolección de recursos: árboles, piedra, carbón, nuevos minerales
     if (tile === "tree"){ player.inv.wood++; world[ty][tx] = "grass"; if (Math.random() < 0.22) player.inv.apple++; drawInv(); refreshHotbarOnInvChange(); }
     else if (tile === "stone"){ player.inv.stone++; if (Math.random() < 0.06) player.inv.coal++; world[ty][tx] = "grass"; drawInv(); refreshHotbarOnInvChange(); }
     else if (tile === "coal"){ player.inv.coal++; world[ty][tx] = "grass"; drawInv(); refreshHotbarOnInvChange(); }
@@ -577,30 +633,9 @@ function craftBoots(){ if (player.inv.plank >= 2){ player.inv.plank -= 2; player
 function toggleCraft(){ craftUI.style.display = craftUI.style.display === "block" ? "none" : "block"; }
 function useApple(){ if (player.inv.apple > 0){ player.inv.apple--; if (gameMode !== "creative"){ player.hp += 30; if (player.hp > player.maxHp) player.hp = player.maxHp; } } drawInv(); refreshHotbarOnInvChange(); }
 
-/* ---------- Drag & Drop equip helpers ---------- */
-function enableDrop(slotElement, type){
-  slotElement.ondragover = (e)=> { e.preventDefault(); slotElement.classList.add('highlight'); };
-  slotElement.ondragleave = ()=> slotElement.classList.remove('highlight');
-  slotElement.ondrop = (e)=>{
-    e.preventDefault();
-    slotElement.classList.remove('highlight');
-    const item = e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("item");
-    if(!item) return;
-    const map = { weapon:["sword","pickaxe"], head:["helmet"], chest:["chestplate"], legs:["leggings"], boots:["boots"] };
-    if(!map[type].includes(item)) return;
-    if(player.equipment[type]) player.inv[player.equipment[type]] = (player.inv[player.equipment[type]]||0)+1;
-    if ((player.inv[item]||0) <= 0 && gameMode !== "creative") return;
-    if (gameMode !== "creative") player.inv[item]--;
-    player.equipment[type] = item;
-    recalcStats(); drawInv(); drawEquipUI(); refreshHotbarOnInvChange();
-  };
-}
-
-/* ---------- UI: inventory & equip drawing (click to use) ---------- */
+/* ---------- UI: inventory & equip drawing (click to use + drag support) ---------- */
 function drawInv(){
-  // muestra/oculta inventario según inventoryOpen
   invUI.style.display = inventoryOpen ? "flex" : "none";
-
   invUI.innerHTML = "";
   const itemsOrder = [
     ["🌳","wood"], ["🗿","stone"], ["🪵","plank"], ["🧱","woodBlock"], ["⬜","stoneBlock"],
@@ -618,40 +653,39 @@ function drawInv(){
       slot.className = "slot" + (selected === id ? " selected" : "");
       slot.draggable = true;
       slot.dataset.item = id;
+      slot.dataset.count = count;
 
-      // CLICK = equipar / usar / seleccionar (comportamiento consolidado)
+      // CLICK = equipar / usar / seleccionar
       slot.onclick = ()=> {
-        // 1) si es equipable -> equipar
         if (isEquippable(id)){
           equipFromInv(id);
           selected = null;
           drawInv();
           return;
         }
-
-        // 2) si es comida -> consumir inmediatamente
         if (id === "apple"){
           useApple();
           selected = null;
           drawInv();
           return;
         }
-
-        // 3) si es colocable -> seleccionar para colocar con click derecho
         if (placeable.has(id)){
           if (selected === id) selected = null;
           else selected = id;
           drawInv();
           return;
         }
-
-        // 4) otros items (minerales) -> los seleccionamos para verlos (o futuras acciones)
         if (selected === id) selected = null;
         else selected = id;
         drawInv();
       };
 
-      slot.ondragstart = (ev)=>{ ev.dataTransfer.setData("text/plain", id); ev.dataTransfer.setData("item", id); };
+      slot.ondragstart = (ev)=>{ 
+        try {
+          ev.dataTransfer.setData("text/plain", id);
+          ev.dataTransfer.setData("from", "inventory");
+        } catch(e){}
+      };
 
       slot.ondblclick = ()=> { if (isEquippable(id)) equipFromInv(id); };
 
@@ -666,6 +700,37 @@ function drawInv(){
     invUI.appendChild(hint);
     selected = null; player.atk = player.baseAtk;
   }
+  // allow dropping onto inventory to receive items dragged from equip/hotbar
+  invUI.ondragover = (e)=> { e.preventDefault(); invUI.classList.add('inv-drop-highlight'); };
+  invUI.ondragleave = ()=> { invUI.classList.remove('inv-drop-highlight'); };
+  invUI.ondrop = (e)=> {
+    e.preventDefault(); invUI.classList.remove('inv-drop-highlight');
+    const item = e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("item");
+    const from = e.dataTransfer.getData("from") || "";
+    if (!item) return;
+    // If from equip, unequip slot (will add to inventory)
+    if (from.startsWith("equip:")){
+      const slotName = from.split(":")[1];
+      unequipSlot(slotName);
+      return;
+    }
+    // If from hotbar, clear that hotbar slot (hotbar is just shortcuts)
+    if (from.startsWith("hotbar:")){
+      const idx = parseInt(from.split(":")[1],10);
+      if (!isNaN(idx)) { hotbar[idx] = null; renderHotbar(); }
+      // don't duplicate when moving from hotbar to inventory (hotbar is not owner), but we might want to add one to inventory
+      // we'll add one if inventory doesn't have it (common expectation)
+      player.inv[item] = (player.inv[item]||0) + 1;
+      drawInv(); refreshHotbarOnInvChange();
+      return;
+    }
+    // If from inventory (drag inside inventory) do nothing — we don't implement swap reordering yet
+    if (from === "inventory" || from === "") return;
+    // fallback: add item to inventory (safe)
+    player.inv[item] = (player.inv[item]||0) + 1;
+    drawInv(); refreshHotbarOnInvChange();
+  };
+
   drawEquipUI();
   renderHotbar();
 }
@@ -678,12 +743,25 @@ function drawEquipUI(){
       div.className = "slot equipped";
       div.textContent = itemIcons[equippedId] || sprites[equippedId] || "?";
       slotElem.appendChild(div);
+
+      // allow dragging the equipped item back to inventory or hotbar
+      slotElem.draggable = true;
+      slotElem.ondragstart = (ev) => {
+        try {
+          ev.dataTransfer.setData("text/plain", equippedId);
+          ev.dataTransfer.setData("from", "equip:" + type);
+        } catch(e){}
+      };
+
     } else {
       const ghostDiv = document.createElement("div");
       ghostDiv.className = "slot ghost";
       ghostDiv.textContent = equipGhost[type] || "?";
       slotElem.appendChild(ghostDiv);
+      slotElem.draggable = false;
+      slotElem.ondragstart = null;
     }
+
     if (type === "weapon"){
       slotElem.onclick = ()=> {
         if (player.equipment.weapon){
@@ -755,10 +833,8 @@ function draw(){
     }
   }
 
-  // UI: add "Mundos" button that opens the world selector + save panel
   ui.innerHTML = `❤️ ${Math.floor(player.hp)}/${player.maxHp} &nbsp;&nbsp; ATK: ${player.atk} &nbsp;&nbsp; DEF: ${(player.defensePercent*100).toFixed(0)}%<br>
     W A S D mover (con cooldown) • 1-9 hotbar • E: inventario (pausa) • Click en inventario = usar/equipar/seleccionar`;
-  // drawInv() no lo llamamos aquí para evitar bucles; lo llamamos cuando hace falta
 }
 
 /* ---------- Game start / loop ---------- */
@@ -776,8 +852,7 @@ function startNewWorld(mode){
 
 function loop(){
   if (!gameStarted){ requestAnimationFrame(loop); return; }
-  if (worldMenuOpen || inventoryOpen){ // pausar si menú de mundos o inventario abierto
-    // muestra overlay cuando inventario abierto
+  if (worldMenuOpen || inventoryOpen){
     pauseOverlay.style.display = inventoryOpen ? "block" : "none";
     requestAnimationFrame(loop);
     return;
@@ -796,14 +871,12 @@ loop();
 window.addEventListener("resize", ()=>{ canvas.width = innerWidth; canvas.height = innerHeight; });
 
 window.addEventListener("keydown", (e)=>{
-  // evitar que cuando inventario abierto, las teclas afecten movimiento
   if (e.key === "e"){
     e.preventDefault();
     toggleInventory();
     return;
   }
 
-  // hotbar keys 1..9
   if (!inventoryOpen && gameStarted && /^[1-9]$/.test(e.key)){
     const n = parseInt(e.key,10);
     hotbarIndex = n-1;
@@ -812,19 +885,13 @@ window.addEventListener("keydown", (e)=>{
     drawInv();
   }
 
-  // movimiento (solo si inventario no abierto)
   if (!inventoryOpen){
     keys[e.key.toLowerCase()] = true;
-    if (e.key === "c"){ // 'c' para crafteo ahora (antes era 'e')
-      toggleCraft();
-    }
-    if (e.key === "u"){
-      useApple();
-    }
+    if (e.key === "c"){ toggleCraft(); }
+    if (e.key === "u"){ useApple(); }
     if (e.key === "Escape"){
       if (worldMenuOpen) toggleWorldMenu();
     }
-    // guardar con Ctrl/Cmd+S
     if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase() === "s"){ e.preventDefault(); const suggested = "save_" + new Date().toISOString().replace(/[:.]/g,'-'); saveWorld(suggested); }
   }
 });
@@ -835,14 +902,8 @@ window.addEventListener("keyup", (e)=>{ keys[e.key.toLowerCase()] = false; });
 function toggleInventory(){
   inventoryOpen = !inventoryOpen;
   invUI.style.display = inventoryOpen ? "flex" : "none";
-  // mostrar overlay visual cuando inventario abierto
   pauseOverlay.style.display = inventoryOpen ? "block" : "none";
-  // si abres inventario, también mostrar inventario y detener el tiempo (handled in loop)
-  if (inventoryOpen){
-    drawInv();
-  } else {
-    drawInv();
-  }
+  if (inventoryOpen) drawInv(); else drawInv();
 }
 
 /* ---------- Saving system (localStorage) (sin cambios de comportamiento) ---------- */
@@ -1063,7 +1124,6 @@ function openWorldSelector(){
   setTimeout(()=>{ worldSelector.classList.add('open'); },10); 
   populateWorldSelector(); 
   worldMenuOpen = true; 
-  // minimizar pociones
   minimizeUI(true);
 }
 function closeWorldSelector(){ 
@@ -1075,6 +1135,8 @@ function closeWorldSelector(){
   },320); 
 }
 function populateWorldSelector(){
+  const worldGrid = document.getElementById("worldGrid");
+  const noWorlds = document.getElementById("noWorlds");
   worldGrid.innerHTML = "";
   const saves = getAllSaves();
   const keys = Object.keys(saves).sort((a,b) => (saves[b].timestamp||0)-(saves[a].timestamp||0));
@@ -1130,6 +1192,17 @@ togglePocionesBtn.onclick = ()=>{
   }
 };
 
+function setPocionesHidden(h){
+  pocionesHidden = !!h;
+  if (pocionesHidden){
+    document.getElementById("quickBar").style.display = "none";
+    openSavesBtn.classList.add('pociones-hidden');
+  } else {
+    document.getElementById("quickBar").style.display = "flex";
+    openSavesBtn.classList.remove('pociones-hidden');
+  }
+}
+
 /* ---------- Initialization ---------- */
 (function ensureQuickPlaceholders(){
   const saves = getAllSaves();
@@ -1142,7 +1215,6 @@ togglePocionesBtn.onclick = ()=>{
   refreshSaveList();
 })();
 
-// default: pociones visible (toggle button active)
 togglePocionesBtn.classList.add('active');
 createNewWorld();
 drawInv(); drawEquipUI(); renderHotbar();
@@ -1164,8 +1236,14 @@ function playSaveSound(){
   } catch (e){ console.warn("Audio error", e); }
 }
 
+/* ---------- Helpers UI (minimizar) ---------- */
+function minimizeUI(min){
+  const quick = document.getElementById("quickBar");
+  if (min) { quick.style.transform = "scale(.96)"; quick.style.opacity = "0.6"; } else { quick.style.transform = ""; quick.style.opacity = "1"; }
+}
+
 /* ---------- pequeña explicación de uso (en consola) ---------- */
-console.log("Controles: WASD mover (con cooldown). E = abrir/cerrar inventario (pausa). 1-9 = hotbar. Click inventario = usar/equipar/seleccionar. Click derecho sobre tierra = colocar bloque (si tienes).");
+console.log("Controles: WASD mover (con cooldown). E = abrir/cerrar inventario (pausa). 1-9 = hotbar. Drag desde inventario -> equip / hotbar. Arrastra equip -> inventario para desequipar.");
 
 /* Fin del script */
 </script>

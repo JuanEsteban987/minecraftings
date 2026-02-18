@@ -2,69 +2,70 @@
 <html lang="es">
 <head>
 <meta charset="utf-8"/>
-<title>Minecraft RPG Emoji — Hotbar drag&drop + wheel + sonidos</title>
+<title>Minecraft RPG Emoji — Hotbar drag/drop + mousewheel + sounds</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
 <style>
-  :root{ --accent:#ffd86b; --ui-bg:rgba(0,0,0,0.7); --slot:#111; --slot-border:#444 }
-  html,body{height:100%; margin:0;}
-  body{margin:0;background:#222;font-family:Arial, sans-serif;overflow:hidden;color:#eee}
-  canvas{display:block;background:#87CEEB; cursor: crosshair;}
-  #ui{position:fixed;top:10px;left:10px;background:rgba(0,0,0,0.6);color:#fff;padding:10px;border-radius:10px;font-size:14px;z-index:50;}
-  /* INVENTARIO (abre con E) */
+  :root { --panel-bg: rgba(0,0,0,0.72); --accent: #ffd86b; --ui-z: 999; }
+  body{margin:0;background:#111217;font-family:Inter,Arial,Helvetica,sans-serif;overflow:hidden;color:#eee}
+  canvas{display:block;background:#87CEEB;}
+  #ui{position:fixed;top:10px;left:10px;background:rgba(0,0,0,0.6);color:#fff;padding:10px;border-radius:10px;font-size:14px;z-index:100;}
+  /* INVENTARIO (ahora se muestra/oculta con E) con animación */
   #inventory{
     position:fixed;
-    bottom:12px;
+    bottom:16px;
     left:50%;
-    transform:translateX(-50%) translateY(18px) scale(0.96);
-    gap:8px;
-    background:var(--ui-bg);
-    padding:12px;
-    border-radius:10px;
-    z-index:160;
-    max-width:90vw;
-    overflow:auto;
+    transform:translateX(-50%) scale(.88);
     display:flex;
-    align-items:center;
-    justify-content:center;
+    gap:8px;
+    background:var(--panel-bg);
+    padding:12px;border-radius:12px;
+    z-index:1005;max-width:92vw;overflow:auto;backdrop-filter: blur(4px);
+    transition: transform .22s cubic-bezier(.2,.9,.2,1), opacity .22s ease;
     opacity:0;
     pointer-events:none;
-    transition: transform .22s cubic-bezier(.2,.9,.2,1), opacity .22s ease;
   }
-  #inventory.open{ transform:translateX(-50%) translateY(0) scale(1); opacity:1; pointer-events:auto; box-shadow:0 12px 40px rgba(0,0,0,0.6); }
+  #inventory.open{ transform:translateX(-50%) scale(1); opacity:1; pointer-events:auto; }
 
-  .slot{width:60px;height:60px;background:var(--slot);border:2px solid var(--slot-border);border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-size:26px;position:relative;cursor:pointer;user-select:none;margin:6px;}
-  .slot.selected{border-color:var(--accent); box-shadow: 0 0 14px rgba(255,200,90,0.12) inset;}
-  .slot.ghost{ opacity:0.28; filter:grayscale(100%);}
+  .slot{width:60px;height:60px;background:#121217;border:2px solid #333;border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-size:26px;position:relative;cursor:pointer;user-select:none;margin:2px;}
+  .slot.dragging{ opacity:0.36; transform:scale(.98); }
+  .selected{border-color:var(--accent); box-shadow: 0 0 14px rgba(255,200,90,0.12) inset;}
   .count{position:absolute;bottom:4px;right:6px;font-size:12px;color:#ddd}
-  #craftMenu{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#111;padding:16px;border-radius:12px;display:none;color:white;z-index:170;}
-  button{margin:6px;padding:8px 12px;cursor:pointer;border-radius:8px;border:0;background:#3dbb3d;color:#042; font-weight:600;}
-  button.ghost{ background:#333; color:#ddd; }
-  #equip{position:fixed; top:10px; right:10px; background:rgba(0,0,0,0.6); color:white; padding:10px; border-radius:10px; display:grid; grid-template-columns:repeat(2,64px); gap:8px; align-items:center; z-index:50;}
-  .equip-slot{width:64px; height:64px; background:var(--slot); border:2px solid var(--slot-border); border-radius:8px; display:flex;align-items:center;justify-content:center;font-size:26px; position:relative; cursor:pointer;}
+  #craftMenu{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#0f1214;padding:16px;border-radius:12px;display:none;color:white;z-index:1100;box-shadow:0 16px 60px rgba(0,0,0,0.6)}
+  button{margin:6px;padding:8px 12px;cursor:pointer;border-radius:8px;border:0;background:#2d2f35;color:#fff}
+  button.secondary{background:#3b6fb1}
+  #equip{position:fixed; top:10px; right:10px; background:var(--panel-bg); color:white; padding:10px; border-radius:10px; display:grid; grid-template-columns:repeat(2,64px); gap:8px; align-items:center; z-index:100;}
+  .equip-slot{width:64px; height:64px; background:#0f1112; border:2px solid #333; border-radius:8px; display:flex;align-items:center;justify-content:center;font-size:26px; position:relative; cursor:pointer;}
   .equip-label{font-size:12px; text-align:center; color:#ddd; grid-column:span 2;}
-  .highlight { box-shadow: 0 0 8px 2px rgba(156,204,255,0.06) inset; border-color: #9cf !important; }
+  .slot.ghost{ opacity:0.28; filter:grayscale(60%); font-size:28px; }
+  .slot.equipped{ opacity:1; filter:none; }
+  .equip-slot .slot{ width:52px; height:52px; font-size:28px; border-radius:6px; border:0; background:transparent; }
 
   /* HOTBAR */
-  #hotbar{ position:fixed; bottom:88px; left:50%; transform:translateX(-50%); display:flex; gap:8px; z-index:140; align-items:center; }
-  .hot-slot{ width:56px; height:56px; background:rgba(0,0,0,0.55); border:2px solid #333; border-radius:8px; display:flex;align-items:center;justify-content:center; color:#fff; font-size:22px; position:relative; cursor:pointer; user-select:none; transition: transform .08s ease, box-shadow .12s ease; }
-  .hot-slot .num{ position:absolute; left:6px; top:4px; font-size:11px; color:#ccc; }
-  .hot-slot.selected{ border-color:var(--accent); box-shadow:0 0 18px rgba(255,200,90,0.12) inset; transform:translateY(-4px) scale(1.02); }
-  .hot-slot .count{ position:absolute; right:4px; bottom:4px; font-size:11px; color:#ddd; }
+  #hotbar{ position:fixed; bottom:86px; left:50%; transform:translateX(-50%); display:flex; gap:10px; z-index:100; user-select:none; }
+  .hot-slot{ width:56px; height:56px; background:rgba(18,20,22,0.52); border:2px solid #222; border-radius:8px; display:flex;align-items:center;justify-content:center; color:#fff; font-size:22px; position:relative; cursor:pointer; transition: transform .12s ease, box-shadow .12s ease; }
+  .hot-slot .num{ position:absolute; left:6px; top:4px; font-size:11px; color:#bbb; }
+  .hot-slot.selected{ border-color:var(--accent); box-shadow:0 6px 18px rgba(255,200,90,0.06) inset; transform:translateY(-4px); }
+  .hot-slot.drag-over{ outline:3px dashed rgba(255,255,255,0.08); transform:scale(1.04); }
 
-  /* small context menu for hotbar */
-  .hot-context{ position:fixed; z-index:9999; background:#111; border:1px solid #333; padding:6px; border-radius:6px; display:none; color:#fff; font-size:13px; }
-  .hot-context button{ background:#222; color:#fff; border-radius:6px; padding:6px 8px; margin:4px 0; display:block; width:100%; text-align:left; }
+  /* menu contextual para asignar desde inventario */
+  #assignMenu{
+    position:fixed; display:none; background:#0b0d0e; border:1px solid #222; padding:8px; border-radius:8px; z-index:1200; box-shadow:0 12px 36px rgba(0,0,0,0.6);
+    max-height:260px; overflow:auto; min-width:160px;
+  }
+  .assign-item{ padding:6px 8px; display:flex; justify-content:space-between; gap:8px; cursor:pointer; border-radius:6px; color:#ddd}
+  .assign-item:hover{ background:rgba(255,255,255,0.02); color:#fff }
 
-  /* pause overlay cuando inventario */
-  #pauseOverlay{ position:fixed; inset:0; background:rgba(0,0,0,0.28); z-index:150; display:none; pointer-events:none; }
+  /* PAUSE overlay when inventory open */
+  #pauseOverlay{ position:fixed; inset:0; background:rgba(0,0,0,0.36); z-index:90; display:none; pointer-events:none; }
 
-  /* main menu, saves, etc (estilos previos simplificados) */
-  #mainMenu{ position:fixed; inset:0; background:#111; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; z-index:999; color:white; }
-  #mainMenu h1{ font-size:42px; margin-bottom:4px; }
-  #savePanel{ position:fixed; right:12px; bottom:72px; width:360px; max-height:70vh; overflow:auto; background:rgba(0,0,0,0.92); color:#fff; padding:12px; border-radius:10px; z-index:90; display:none; box-shadow:0 8px 40px rgba(0,0,0,0.8); transition: transform .28s ease, opacity .28s ease; }
+  /* save panel / other UI lightly styled */
+  #savePanel{ position:fixed; right:12px; bottom:72px; width:360px; max-height:70vh; overflow:auto; background:#0a0b0c; color:#fff; padding:12px; border-radius:10px; z-index:100; display:none; box-shadow:0 8px 40px rgba(0,0,0,0.8); transition: transform .28s ease, opacity .28s ease; }
+  .save-row{display:flex;align-items:center;justify-content:space-between;padding:8px;border-bottom:1px solid rgba(255,255,255,0.02);font-size:13px;gap:8px;}
+  .save-card{width:84px;height:64px;border-radius:6px;background:#060708;display:flex;align-items:center;justify-content:center;overflow:hidden;border:1px solid #111}
+  .placeholder{ color:#777; font-size:12px; text-align:center; }
 
   @media (max-width:700px){
-    #inventory{ left:50%; bottom:8px; transform:translateX(-50%); }
-    .slot{width:48px;height:48px;font-size:22px;}
+    .slot{width:48px;height:48px;font-size:20px}
     .hot-slot{ width:44px; height:44px; font-size:18px; }
   }
 </style>
@@ -72,15 +73,17 @@
 <body>
 
 <!-- MAIN MENU -->
-<div id="mainMenu">
-  <h1>Minecraft RPG Emoji</h1>
-  <div class="subtitle">Arrastra a la hotbar, rueda para seleccionar, E abre inventario (pausa)</div>
-  <div style="display:flex;gap:10px">
-    <button onclick="startNewWorld('survival')">🌲 Nuevo — Survival</button>
-    <button class="ghost" onclick="startNewWorld('creative')">🧱 Nuevo — Creativo</button>
-    <button class="ghost" onclick="openWorldSelector()">📁 Seleccionar Mundo</button>
+<div id="mainMenu" style="display:flex;position:fixed;inset:0;align-items:center;justify-content:center;z-index:1200;background:#071018">
+  <div style="text-align:center;color:#fff">
+    <h1 style="font-size:36px;margin:0 0 8px 0">Minecraft RPG Emoji</h1>
+    <div style="margin-bottom:12px;color:#cfcfcf">Hotbar 1–9, engancha arrastrando al hotbar, rueda del ratón para cambiar</div>
+    <div style="display:flex;gap:12px;justify-content:center">
+      <button onclick="startNewWorld('survival')">🌲 Nuevo — Survival</button>
+      <button onclick="startNewWorld('creative')">🧱 Nuevo — Creativo</button>
+      <button class="secondary" onclick="openWorldSelector()">📁 Seleccionar Mundo</button>
+    </div>
+    <div style="margin-top:8px;color:#bdbdbd;font-size:13px;">Pulsa <b>E</b> para abrir inventario (pausa) • Arrastra desde inventario a la hotbar</div>
   </div>
-  <div style="margin-top:8px;font-size:13px;color:#ccc">Arrastra desde inventario → hotbar. Click derecho en hotbar = asignar/limpiar.</div>
 </div>
 
 <canvas id="game"></canvas>
@@ -99,20 +102,43 @@
 <!-- pause overlay -->
 <div id="pauseOverlay"></div>
 
-<!-- Save / Quick UI -->
-<button id="openSavesBtn" title="Abrir Guardar/Cargar" style="position:fixed; right:12px; bottom:10px; z-index:95;">💾 Guardar/Cargar</button>
+<!-- Save / Quick UI (pociones abajo derecha) -->
+<button id="openSavesBtn" title="Abrir Guardar/Cargar" style="position:fixed;right:12px;bottom:10px;z-index:100;background:#101316;color:#fff;border-radius:8px;padding:6px 8px;">💾 Guardar/Cargar</button>
 
 <!-- HOTBAR -->
 <div id="hotbar" aria-hidden="false"></div>
 
-<!-- inventory -->
-<div id="inventory" role="dialog" aria-label="Inventario"></div>
+<!-- assign menu (context menu to assign a hotbar slot from inventory) -->
+<div id="assignMenu"></div>
 
-<!-- Hotbar context menu -->
-<div id="hotContext" class="hot-context"></div>
+<!-- Save Panel (simplified for this demo) -->
+<div id="savePanel" role="dialog" aria-label="Guardar y cargar mundos">
+  <h3 style="margin:0 0 8px 0">💾 Guardar / Cargar mundos</h3>
+  <div id="saveList"></div>
+</div>
 
-<!-- Save panel (simplified) -->
-<div id="savePanel"></div>
+<!-- Inventory (rendered by JS) -->
+<div id="inventory"></div>
+
+<!-- Craft menu (kept from previous functionality) -->
+<div id="craftMenu">
+  <h3>⚒️ Crafteo</h3>
+  <div>
+    <button onclick="craftPlank()">🪵 1 madera → 4 tablones</button><br>
+    <button onclick="craftWoodBlock()">🧱 4 tablones → bloque madera</button><br>
+    <button onclick="craftStoneBlock()">⬜ 4 piedra → bloque piedra</button><br>
+    <hr style="border:0;border-top:1px solid #222;margin:8px 0;">
+    <button onclick="craftHelmet()">🪖 Casco (3 tablones)</button><br>
+    <button onclick="craftChestplate()">🛡️ Pechera (6 tablones)</button><br>
+    <button onclick="craftLeggings()">🩳 Pantalones (5 tablones)</button><br>
+    <button onclick="craftBoots()">👢 Botas (2 tablones)</button><br>
+    <button onclick="craftSword()">⚔️ Espada (2 tablones + 1 piedra)</button><br>
+    <button onclick="craftPickaxe()">⛏️ Pico (3 piedra + 2 tablones)</button><br>
+  </div>
+  <div style="margin-top:10px;">
+    <button onclick="toggleCraft()">Cerrar</button>
+  </div>
+</div>
 
 <script>
 /* ================= CONFIG & STATE ================= */
@@ -120,12 +146,17 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const ui = document.getElementById("ui");
 const invUI = document.getElementById("inventory");
+const craftUI = document.getElementById("craftMenu");
+const equipWeapon = document.getElementById("equip-weapon");
+const equipHead = document.getElementById("equip-head");
+const equipChest = document.getElementById("equip-chest");
+const equipLegs = document.getElementById("equip-legs");
+const equipBoots = document.getElementById("equip-boots");
 const hotbarEl = document.getElementById("hotbar");
+const assignMenu = document.getElementById("assignMenu");
 const pauseOverlay = document.getElementById("pauseOverlay");
-const hotContext = document.getElementById("hotContext");
-const openSavesBtn = document.getElementById("openSavesBtn");
-const mainMenu = document.getElementById("mainMenu");
 const savePanel = document.getElementById("savePanel");
+const mainMenu = document.getElementById("mainMenu");
 
 canvas.width = innerWidth;
 canvas.height = innerHeight;
@@ -134,94 +165,94 @@ const TILE = 58;
 const WORLD_W = 80;
 const WORLD_H = 80;
 
+/* Game state */
+let gameMode = null;
 let gameStarted = false;
-let gameMode = null; // "survival"|"creative"
 let worldMenuOpen = false;
 let inventoryOpen = false;
+let pocionesHidden = false;
+let worldSeed = null;
 
-const sprites = {
-  tree: "🌳", stone: "🗿", coal: "⚫", player: "🧙", enemy: "👹",
-  woodBlock: "🧱", stoneBlock: "⬜", plank: "🪵", apple: "🍎",
-  sword: "⚔️", pickaxe: "⛏️", helmet: "🪖", chestplate: "🛡️", leggings: "🩳", boots: "👢",
-  iron: "⛓️", gold: "🥇", mithril: "🔷", diamond: "💎", ruby: "🔴"
-};
-const itemIcons = {
-  wood: "🌳", stone: "🗿", plank: "🪵", woodBlock: "🧱", stoneBlock: "⬜",
-  coal: "⚫", apple: "🍎", sword: "⚔️", pickaxe: "⛏️", helmet: "🪖", chestplate: "🛡️", leggings: "🩳", boots: "👢",
-  iron: "⛓️", gold: "🥇", mithril: "🔷", diamond: "💎", ruby: "🔴"
-};
+/* sprites / icons */
+const sprites = { tree:"🌳", stone:"🗿", player:"🧙", enemy:"👹", woodBlock:"🧱", stoneBlock:"⬜", plank:"🪵", apple:"🍎", sword:"⚔️", pickaxe:"⛏️", helmet:"🪖", chestplate:"🛡️", leggings:"🩳", boots:"👢", iron:"⛓️", gold:"🥇", mithril:"🔷", diamond:"💎", ruby:"🔴"};
+const itemIcons = { wood:"🌳", stone:"🗿", plank:"🪵", woodBlock:"🧱", stoneBlock:"⬜", coal:"⚫", apple:"🍎", sword:"⚔️", pickaxe:"⛏️", helmet:"🪖", chestplate:"🛡️", leggings:"🩳", boots:"👢", iron:"⛓️", gold:"🥇", mithril:"🔷", diamond:"💎", ruby:"🔴" };
+const equipGhost = { weapon:"⚔️", head:"🪖", chest:"🛡️", legs:"👖", boots:"🥾" };
 
+/* world / player / enemies */
 let world = [];
 let player = null;
 let enemies = [];
+
+/* input/camera */
 let keys = {};
-let camX=0, camY=0;
+let camX = 0, camY = 0;
+
 const placeable = new Set(["woodBlock","stoneBlock"]);
 let moveCD = 0, MOVE_DELAY = 10;
-let selected = null; // item id selected for placement/viewing
+
+/* inventory / hotbar */
+let selected = null; // id of selected item for placement / highlight
 let hotbar = new Array(9).fill(null);
 let hotbarIndex = 0;
 
-/* ========== AUDIO (open/close inventory + assign) ========== */
-function playTone(f=880, dur=120, vol=0.02, type='sine'){
-  try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    const actx = new AudioCtx();
-    const o = actx.createOscillator();
-    const g = actx.createGain();
-    o.type = type;
-    o.frequency.value = f;
-    g.gain.value = vol;
-    o.connect(g); g.connect(actx.destination);
-    o.start();
-    setTimeout(()=>{ o.stop(); try{ actx.close(); }catch(e){} }, dur);
-  } catch(e){ /* ignore */ }
-}
-function soundOpenInventory(){ playTone(660,140,0.02,'triangle'); playTone(880,140,0.01,'sine'); }
-function soundCloseInventory(){ playTone(420,120,0.02,'sine'); }
-function soundAssignSlot(){ playTone(1200,90,0.02,'sine'); }
-
-/* ========== WORLD CREATION ========== */
+/* small helpers */
 function genSeed(){ return Math.floor(Math.random()*0xFFFFFFFF); }
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+
+/* ---------- sound helpers (WebAudio) ---------- */
+let audioCtx = null;
+function ensureAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+function playTone(freq=880, duration=110, gain=0.02){
+  try {
+    ensureAudio();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'sine'; o.frequency.value = freq;
+    g.gain.value = gain;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start();
+    setTimeout(()=>{ o.stop(); }, duration);
+  } catch (e){ console.warn('audio', e); }
+}
+function playOpenSound(){ playTone(720,160,0.02); playTone(980,120,0.01); }
+function playCloseSound(){ playTone(420,140,0.03); }
+
+/* ---------- world generation ---------- */
 function createNewWorld(seed=null){
+  worldSeed = seed === null ? genSeed() : seed;
   world = [];
   for (let y=0;y<WORLD_H;y++){
     world[y]=[];
     for (let x=0;x<WORLD_W;x++){
-      const r = Math.random();
-      if (r < 0.12) world[y][x]="tree";
-      else if (r < 0.20) {
-        if (Math.random()<0.06) world[y][x]="coal"; else world[y][x]="stone";
-      } else if (r < 0.22) world[y][x]="iron";
-      else if (r < 0.225) world[y][x]="gold";
-      else if (r < 0.227) world[y][x]="mithril";
-      else if (r < 0.231) world[y][x]="diamond";
-      else if (r < 0.235) world[y][x]="ruby";
+      let r=Math.random();
+      if (r<0.12) world[y][x]="tree";
+      else if (r<0.20) { if (Math.random()<0.06) world[y][x]="coal"; else world[y][x]="stone"; }
+      else if (r<0.22) world[y][x]="iron";
+      else if (r<0.225) world[y][x]="gold";
+      else if (r<0.227) world[y][x]="mithril";
+      else if (r<0.231) world[y][x]="diamond";
+      else if (r<0.235) world[y][x]="ruby";
       else world[y][x]="grass";
     }
   }
-  player = {
-    x: Math.floor(WORLD_W/2), y: Math.floor(WORLD_H/2),
-    hp:100, maxHp:100, baseAtk:8, atk:8,
-    defensePercent:0, extraMaxHp:0,
-    inv: { wood:0, stone:0, plank:0, woodBlock:0, stoneBlock:0, coal:0, apple:0, sword:0, pickaxe:0, helmet:0, chestplate:0, leggings:0, boots:0, iron:0, gold:0, mithril:0, diamond:0, ruby:0 },
-    equipment: { weapon:null, head:null, chest:null, legs:null, boots:null }
-  };
-  enemies = [];
-  for (let i=0;i<25;i++) enemies.push({ x:Math.floor(Math.random()*WORLD_W), y:Math.floor(Math.random()*WORLD_H), hp:28, atk:6, moveCD:Math.floor(Math.random()*30), attackCD:0 });
+  player = { x:Math.floor(WORLD_W/2), y:Math.floor(WORLD_H/2), hp:100, maxHp:100, baseAtk:8, atk:8, defensePercent:0, extraMaxHp:0,
+    inv:{ wood:0, stone:0, plank:0, woodBlock:0, stoneBlock:0, coal:0, apple:0, sword:0, pickaxe:0, helmet:0, chestplate:0, leggings:0, boots:0, iron:0, gold:0, mithril:0, diamond:0, ruby:0 },
+    equipment:{ weapon:null, head:null, chest:null, legs:null, boots:null } };
+  enemies=[];
+  for (let i=0;i<24;i++) enemies.push({ x:Math.floor(Math.random()*WORLD_W), y:Math.floor(Math.random()*WORLD_H), hp:28, atk:6, moveCD:Math.floor(Math.random()*30), attackCD:0 });
   populateHotbarAuto();
 }
 
-/* ========== HOTBAR RENDER & DRAG/DROP ========== */
+/* ---------- hotbar: render + drag/drop + context menu ---------- */
 function populateHotbarAuto(){
   const order = ["wood","stone","plank","woodBlock","stoneBlock","coal","apple","sword","pickaxe","helmet","chestplate","leggings","boots","iron","gold","mithril","diamond","ruby"];
-  hotbar.fill(null);
-  let i=0;
+  hotbar.fill(null); let i=0;
   for (const id of order){
     if (i>=9) break;
-    if ((player.inv[id]||0)>0){ hotbar[i]=id; i++; }
+    if ((player.inv[id]||0)>0){ hotbar[i++]=id; }
   }
-  hotbarIndex = 0; renderHotbar();
+  hotbarIndex = 0; selected = hotbar[hotbarIndex];
+  renderHotbar();
 }
 function renderHotbar(){
   hotbarEl.innerHTML = "";
@@ -229,304 +260,286 @@ function renderHotbar(){
     const slot = document.createElement("div");
     slot.className = "hot-slot" + (hotbarIndex===i ? " selected" : "");
     slot.dataset.index = i;
-    const num = document.createElement("div"); num.className = "num"; num.textContent = (i+1);
+    slot.draggable = true;
+    const num = document.createElement("div"); num.className="num"; num.textContent = (i+1);
     slot.appendChild(num);
     const id = hotbar[i];
     if (id){
-      const ic = document.createElement("div"); ic.textContent = itemIcons[id]||id;
-      slot.appendChild(ic);
-      const cnt = document.createElement("div"); cnt.className = "count"; cnt.textContent = (gameMode==="creative") ? "∞" : (player.inv[id]||0);
+      const icon = document.createElement("div"); icon.style.pointerEvents="none"; icon.textContent = itemIcons[id]||id;
+      slot.appendChild(icon);
+      const cnt = document.createElement("div"); cnt.className="count"; cnt.textContent = (player.inv[id]||0);
       slot.appendChild(cnt);
     }
     // click selects
-    slot.addEventListener("click", (ev)=> {
+    slot.addEventListener("click", (ev)=>{
       hotbarIndex = i; selected = hotbar[i]; renderHotbar(); drawInv();
     });
-    // right-click: assign currently selected inventory item to this slot (or clear if none)
-    slot.addEventListener("contextmenu", (ev)=>{
-      ev.preventDefault();
-      showHotContext(i, ev.clientX, ev.clientY);
+    // dragstart: allow dragging hotbar item to another hotbar slot (it will copy reference)
+    slot.addEventListener("dragstart",(ev)=>{
+      ev.dataTransfer.setData("text/plain", JSON.stringify({type:'hotbar', item: hotbar[i]}));
+      slot.classList.add('dragging');
     });
-    // drag & drop handlers (accept items dragged from inventory)
-    slot.addEventListener("dragover", (ev)=>{ ev.preventDefault(); slot.style.boxShadow = "0 0 8px rgba(200,200,255,0.06) inset"; });
-    slot.addEventListener("dragleave", ()=>{ slot.style.boxShadow = ""; });
-    slot.addEventListener("drop", (ev)=> {
-      ev.preventDefault();
-      slot.style.boxShadow = "";
-      const id = ev.dataTransfer.getData("text/plain") || ev.dataTransfer.getData("item");
-      if (!id) return;
-      hotbar[i] = id;
-      renderHotbar();
-      soundAssignSlot();
+    slot.addEventListener("dragend",(ev)=>{ slot.classList.remove('dragging'); });
+    // support drop from inventory: allow drop
+    slot.addEventListener("dragover",(ev)=>{ ev.preventDefault(); slot.classList.add('drag-over'); });
+    slot.addEventListener("dragleave",(ev)=>{ slot.classList.remove('drag-over'); });
+    slot.addEventListener("drop",(ev)=>{
+      ev.preventDefault(); slot.classList.remove('drag-over');
+      const dt = ev.dataTransfer.getData("text/plain");
+      if (!dt) return;
+      try {
+        const parsed = JSON.parse(dt);
+        if (parsed && parsed.type === 'inv' && parsed.item){
+          hotbar[i] = parsed.item; renderHotbar(); selected = hotbar[hotbarIndex];
+          drawInv();
+          return;
+        }
+        // support dropping hotbar->hotbar (swap/copy)
+        const parsed2 = (typeof parsed === 'object') ? parsed : null;
+        if (parsed2 && parsed2.type==='hotbar'){
+          // swap or set
+          hotbar[i] = parsed2.item;
+          renderHotbar();
+          return;
+        }
+      } catch(e){
+        // maybe a plain string item id (backwards)
+        try {
+          const itemId = dt;
+          if (itemId) { hotbar[i]=itemId; renderHotbar(); }
+        } catch(e){}
+      }
     });
+
+    // contextmenu: open assign menu
+    slot.addEventListener("contextmenu", (ev)=>{ ev.preventDefault(); openAssignMenu(i, ev.clientX, ev.clientY); });
+
     hotbarEl.appendChild(slot);
   }
 }
 
-/* small context menu: assign or clear */
-function showHotContext(index, x, y){
-  hotContext.style.left = x + "px";
-  hotContext.style.top = y + "px";
-  hotContext.innerHTML = "";
-  const assignBtn = document.createElement("button");
-  assignBtn.textContent = "Asignar item seleccionado a slot " + (index+1);
-  assignBtn.onclick = ()=> {
-    if (selected){ hotbar[index] = selected; renderHotbar(); soundAssignSlot(); }
-    else alert("Selecciona un item en el inventario primero para asignarlo aquí.");
-    hotContext.style.display = "none";
-  };
-  const clearBtn = document.createElement("button");
-  clearBtn.textContent = "Limpiar slot " + (index+1);
-  clearBtn.onclick = ()=> { hotbar[index] = null; renderHotbar(); hotContext.style.display = "none"; };
-  const quickFill = document.createElement("button");
-  quickFill.textContent = "Seleccionar primer item disponible";
-  quickFill.onclick = ()=> {
-    // pick first item in inventory (not zero)
-    const keys = Object.keys(player.inv);
-    for (const k of keys){ if ((player.inv[k]||0) > 0){ hotbar[index] = k; renderHotbar(); break; } }
-    hotContext.style.display = "none";
-  };
-  hotContext.appendChild(assignBtn);
-  hotContext.appendChild(quickFill);
-  hotContext.appendChild(clearBtn);
-  hotContext.style.display = "block";
-  // hide on next click anywhere
-  setTimeout(()=> { window.addEventListener("click", hideHotContextOnce); }, 10);
+/* Open a small menu that lists inventory items to assign to hotbar slot i */
+function openAssignMenu(slotIndex, x, y){
+  assignMenu.innerHTML = "";
+  const items = Object.keys(player.inv).filter(id => (player.inv[id]||0) > 0);
+  if (items.length === 0){
+    const p = document.createElement("div"); p.className="assign-item"; p.textContent = "No items en inventario"; assignMenu.appendChild(p);
+  } else {
+    items.forEach(id=>{
+      const row = document.createElement("div"); row.className="assign-item";
+      row.innerHTML = `<span>${itemIcons[id] || id}</span><span style="opacity:.8">${id} <span style="color:#aaa">×${player.inv[id]||0}</span></span>`;
+      row.onclick = ()=> { hotbar[slotIndex] = id; renderHotbar(); assignMenu.style.display='none'; };
+      assignMenu.appendChild(row);
+    });
+    // option to clear slot
+    const clear = document.createElement("div"); clear.className="assign-item"; clear.style.borderTop="1px dashed #222"; clear.textContent="Borrar ranura"; clear.onclick = ()=>{ hotbar[slotIndex]=null; renderHotbar(); assignMenu.style.display='none'; };
+    assignMenu.appendChild(clear);
+  }
+  assignMenu.style.left = x + "px"; assignMenu.style.top = y + "px"; assignMenu.style.display = "block";
+  // hide when clicking elsewhere
+  setTimeout(()=>{ window.addEventListener('click', closeAssignMenuOnce); }, 10);
 }
-function hideHotContextOnce(){ hotContext.style.display = "none"; window.removeEventListener("click", hideHotContextOnce); }
+function closeAssignMenuOnce(){ assignMenu.style.display='none'; window.removeEventListener('click', closeAssignMenuOnce); }
 
-/* ========== INVENTORY DRAW + DRAG START ========== */
+/* ---------- inventory rendering + drag start ---------- */
 function drawInv(){
-  invUI.classList.toggle("open", inventoryOpen);
-  invUI.style.display = inventoryOpen ? "flex" : "none";
   invUI.innerHTML = "";
-
-  const itemsOrder = [
-    ["🌳","wood"], ["🗿","stone"], ["🪵","plank"], ["🧱","woodBlock"], ["⬜","stoneBlock"],
-    ["⚫","coal"], ["🍎","apple"], ["⚔️","sword"], ["⛏️","pickaxe"],
-    ["🪖","helmet"], ["🛡️","chestplate"], ["🩳","leggings"], ["👢","boots"],
-    ["⛓️","iron"], ["🥇","gold"], ["🔷","mithril"], ["💎","diamond"], ["🔴","ruby"]
-  ];
+  invUI.classList.toggle('open', inventoryOpen);
+  // Build list of items to show (same order as earlier)
+  const itemsOrder = ["wood","stone","plank","woodBlock","stoneBlock","coal","apple","sword","pickaxe","helmet","chestplate","leggings","boots","iron","gold","mithril","diamond","ruby"];
   let any=false;
-  itemsOrder.forEach(it=>{
-    const id = it[1];
-    const count = (gameMode==="creative") ? 999 : (player.inv[id]||0);
+  itemsOrder.forEach(id=>{
+    const count = player.inv[id] || 0;
     if (count > 0){
-      any = true;
+      any=true;
       const slot = document.createElement("div");
-      slot.className = "slot" + (selected===id? " selected":"");
+      slot.className = "slot" + (selected === id ? " selected" : "");
       slot.draggable = true;
       slot.dataset.item = id;
-      slot.innerHTML = (itemIcons[id]||it[0]) + `<div class="count">${count}</div>`;
-      // click = equip/use/select
-      slot.addEventListener("click", ()=> {
-        if (["sword","pickaxe","helmet","chestplate","leggings","boots"].includes(id)){
-          equipFromInv(id);
-          selected = null;
-          drawInv();
-          return;
-        }
-        if (id === "apple"){
-          useApple();
-          selected = null;
-          drawInv(); return;
-        }
-        if (placeable.has(id)){
-          selected = (selected===id? null:id);
-          drawInv();
-          return;
-        }
-        selected = (selected===id? null:id);
-        drawInv();
+      slot.innerHTML = (itemIcons[id]||id) + `<div class="count">${count}</div>`;
+      // click to use/equip/consume/ select (existing behavior)
+      slot.onclick = ()=>{
+        if (isEquippable(id)){ equipFromInv(id); selected = null; drawInv(); return; }
+        if (id === "apple"){ useApple(); selected = null; drawInv(); return; }
+        if (placeable.has(id)){ selected = (selected===id ? null : id); drawInv(); return; }
+        selected = (selected===id ? null : id); drawInv();
+      };
+      // dragstart: mark dataTransfer type 'inv' so hotbar can detect
+      slot.addEventListener("dragstart", (ev)=> {
+        ev.dataTransfer.setData("text/plain", JSON.stringify({ type:'inv', item:id }));
+        slot.classList.add('dragging');
       });
-      slot.addEventListener("dblclick", ()=> { if (["sword","pickaxe","helmet","chestplate","leggings","boots"].includes(id)) equipFromInv(id); });
-
-      // dragstart -> provide id
-      slot.addEventListener("dragstart", (ev)=>{
-        ev.dataTransfer.setData("text/plain", id);
-        ev.dataTransfer.setData("item", id);
-      });
-
+      slot.addEventListener("dragend", ()=> slot.classList.remove('dragging'));
       invUI.appendChild(slot);
     }
   });
   if (!any){
-    const hint = document.createElement("div"); hint.style.color="#ddd"; hint.style.padding="8px 12px"; hint.textContent="Inventario vacío — recoge recursos";
+    const hint = document.createElement("div"); hint.style.color="#ccc"; hint.style.padding="8px"; hint.textContent="Inventario vacío";
     invUI.appendChild(hint);
-    selected = null;
   }
   drawEquipUI();
   renderHotbar();
 }
 
-/* ========== Equip functions ========== */
-function isEquippable(id){ return ["sword","pickaxe","helmet","chestplate","leggings","boots"].includes(id); }
-function equipFromInv(itemId){
-  if (!itemId || (player.inv[itemId] || 0) <= 0) return;
-  if (itemId==="sword" || itemId==="pickaxe"){
-    if (player.equipment.weapon) player.inv[player.equipment.weapon] = (player.inv[player.equipment.weapon]||0) + 1;
-    player.inv[itemId]--; player.equipment.weapon = itemId;
-    recalcStats(); drawInv(); drawEquipUI(); return;
-  }
-  const armorMap = { helmet:"head", chestplate:"chest", leggings:"legs", boots:"boots" };
-  if (armorMap[itemId]){
-    const slot = armorMap[itemId];
-    if (player.equipment[slot]) player.inv[player.equipment[slot]] = (player.inv[player.equipment[slot]]||0)+1;
-    player.inv[itemId]--; player.equipment[slot] = itemId;
-    recalcStats(); drawInv(); drawEquipUI(); return;
-  }
-}
-function unequipSlot(slot){
-  if (!slot) return;
-  const val = player.equipment[slot];
-  if (!val) return;
-  player.inv[val] = (player.inv[val]||0) + 1;
-  player.equipment[slot] = null;
-  recalcStats(); drawInv(); drawEquipUI();
-}
+/* ---------- equip UI (drag drop to equip still supported) ---------- */
 function drawEquipUI(){
-  const fill = (slotElem, type) => {
+  const fill = (slotElem, type)=>{
     slotElem.innerHTML = "";
-    const equippedId = (type==="weapon") ? player.equipment.weapon : (type==="head"?player.equipment.head:(type==="chest"?player.equipment.chest:(type==="legs"?player.equipment.legs:player.equipment.boots)));
-    if (equippedId){
-      const d = document.createElement("div"); d.className="slot"; d.textContent = itemIcons[equippedId] || "?"; slotElem.appendChild(d);
+    const equipped = (type==="weapon") ? player.equipment.weapon : (type==="head") ? player.equipment.head : (type==="chest") ? player.equipment.chest : (type==="legs") ? player.equipment.legs : player.equipment.boots;
+    if (equipped){
+      const d = document.createElement("div"); d.className="slot equipped"; d.textContent = itemIcons[equipped]||equipped; slotElem.appendChild(d);
     } else {
-      const ghost = document.createElement("div"); ghost.className="slot ghost"; ghost.textContent = (type==="weapon"?"⚔️": type==="head"?"🪖": type==="chest"?"🛡️": type==="legs"?"👖":"🥾"); slotElem.appendChild(ghost);
+      const ghost = document.createElement("div"); ghost.className="slot ghost"; ghost.textContent = equipGhost[type] || "?"; slotElem.appendChild(ghost);
     }
     if (type==="weapon"){
       slotElem.onclick = ()=> { if (player.equipment.weapon){ player.inv[player.equipment.weapon] = (player.inv[player.equipment.weapon]||0)+1; player.equipment.weapon=null; recalcStats(); drawInv(); drawEquipUI(); } };
     } else {
       const map = { head:"head", chest:"chest", legs:"legs", boots:"boots" };
-      slotElem.onclick = ()=> unequipSlot(map[type]);
+      slotElem.onclick = ()=> { player.inv[player.equipment[map[type]]] = (player.inv[player.equipment[map[type]]]||0)+1; player.equipment[map[type]] = null; recalcStats(); drawInv(); drawEquipUI(); };
     }
   };
-  fill(document.getElementById("equip-weapon"), "weapon");
-  fill(document.getElementById("equip-head"), "head");
-  fill(document.getElementById("equip-chest"), "chest");
-  fill(document.getElementById("equip-legs"), "legs");
-  fill(document.getElementById("equip-boots"), "boots");
+  fill(equipWeapon,"weapon"); fill(equipHead,"head"); fill(equipChest,"chest"); fill(equipLegs,"legs"); fill(equipBoots,"boots");
+  enableDrop(equipWeapon,"weapon"); enableDrop(equipHead,"head"); enableDrop(equipChest,"chest"); enableDrop(equipLegs,"legs"); enableDrop(equipBoots,"boots");
 }
 
-/* ========== Movement, enemies, recolección ========== */
-function recalcStats(){
-  player.atk = player.baseAtk; player.defensePercent = 0; player.extraMaxHp = 0;
-  if (player.equipment.weapon==="sword") player.atk+=8;
-  if (player.equipment.weapon==="pickaxe") player.atk+=2;
-  if (player.equipment.head==="helmet"){ player.defensePercent+=0.06; player.extraMaxHp+=6; }
-  if (player.equipment.chest==="chestplate"){ player.defensePercent+=0.28; player.extraMaxHp+=22; }
-  if (player.equipment.legs==="leggings"){ player.defensePercent+=0.12; player.extraMaxHp+=10; }
-  if (player.equipment.boots==="boots"){ player.defensePercent+=0.05; player.extraMaxHp+=4; }
-  player.defensePercent = Math.min(player.defensePercent, 0.7);
-  player.maxHp = 100 + player.extraMaxHp; if (player.hp > player.maxHp) player.hp = player.maxHp;
-}
-function isBlockingTile(tile){ return tile==="tree"||tile==="stone"||tile==="woodBlock"||tile==="stoneBlock"||tile==="iron"||tile==="gold"||tile==="mithril"||tile==="diamond"||tile==="ruby"; }
-function attemptMove(nx, ny){
-  if (nx<0||nx>=WORLD_W||ny<0||ny>=WORLD_H) return false;
-  if (isBlockingTile(world[ny][nx])) return false;
-  for (let i=enemies.length-1;i>=0;i--){ if (enemies[i].x===nx && enemies[i].y===ny){ enemies[i].hp -= player.atk; if (enemies[i].hp<=0) enemies.splice(i,1); else { const dmg = enemies[i].atk*(1-player.defensePercent); if (gameMode!=="creative"){ player.hp -= dmg; if (player.hp<0) player.hp=0; } } return false; } }
-  player.x = nx; player.y = ny; return true;
-}
-function movePlayer(){
-  if (moveCD>0) return;
-  let moved=false;
-  if (keys["w"]){ if (attemptMove(player.x, player.y-1)) moved=true; }
-  else if (keys["s"]){ if (attemptMove(player.x, player.y+1)) moved=true; }
-  else if (keys["a"]){ if (attemptMove(player.x-1, player.y)) moved=true; }
-  else if (keys["d"]){ if (attemptMove(player.x+1, player.y)) moved=true; }
-  if (moved) moveCD = MOVE_DELAY;
-}
-function moveEnemies(){
-  for (const e of enemies){
-    if (e.moveCD>0) e.moveCD--; else {
-      e.moveCD = 14 + Math.floor(Math.random()*18);
-      const dx = player.x - e.x, dy = player.y - e.y;
-      const dist = Math.abs(dx)+Math.abs(dy);
-      let moved=false;
-      if (dist < 8){
-        const tryOrder = Math.abs(dx)>Math.abs(dy) ? [[Math.sign(dx),0],[0,Math.sign(dy)],[0,-Math.sign(dy)],[-Math.sign(dx),0]] : [[0,Math.sign(dy)],[Math.sign(dx),0],[-Math.sign(dx),0],[0,-Math.sign(dy)]];
-        for (const d of tryOrder){
-          const nx=e.x+d[0], ny=e.y+d[1];
-          if (nx<0||nx>=WORLD_W||ny<0||ny>=WORLD_H) continue;
-          if (isBlockingTile(world[ny][nx])) continue;
-          if (enemies.some(o=>o!==e && o.x===nx && o.y===ny)) continue;
-          e.x = nx; e.y = ny; moved=true; break;
-        }
-      } else {
-        const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
-        for (let t=0;t<6 && !moved;t++){ const d=dirs[Math.floor(Math.random()*dirs.length)]; const nx=e.x+d[0], ny=e.y+d[1]; if (nx<0||nx>=WORLD_W||ny<0||ny>=WORLD_H) continue; if (isBlockingTile(world[ny][nx])) continue; if (enemies.some(o=>o!==e && o.x===nx && o.y===ny)) continue; e.x=nx; e.y=ny; moved=true; break; }
-      }
-    }
-    const md = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
-    if (md === 1){
-      if (e.attackCD === undefined) e.attackCD = 0;
-      if (e.attackCD <= 0){ const dmg = e.atk*(1-player.defensePercent); if (gameMode!=="creative"){ player.hp -= dmg; if (player.hp<0) player.hp=0; } e.attackCD = 24; } else e.attackCD--;
-    } else { if (e.attackCD>0) e.attackCD--; }
+/* helper for equip */
+function isEquippable(id){ return ["sword","pickaxe","helmet","chestplate","leggings","boots"].includes(id); }
+function equipFromInv(itemId){
+  if (!itemId || (player.inv[itemId]||0) <= 0) return;
+  if (itemId==="sword" || itemId==="pickaxe"){
+    if (player.equipment.weapon) player.inv[player.equipment.weapon] = (player.inv[player.equipment.weapon]||0)+1;
+    player.inv[itemId]--; player.equipment.weapon = itemId; recalcStats(); drawInv(); drawEquipUI(); return;
+  }
+  const armorMap = { helmet:"head", chestplate:"chest", leggings:"legs", boots:"boots" };
+  if (armorMap[itemId]){
+    const slot = armorMap[itemId];
+    if (player.equipment[slot]) player.inv[player.equipment[slot]] = (player.inv[player.equipment[slot]]||0)+1;
+    player.inv[itemId]--; player.equipment[slot] = itemId; recalcStats(); drawInv(); drawEquipUI(); return;
   }
 }
 
-/* ========== Click interactions (collect/place/attack) ========== */
-canvas.addEventListener("mousedown", (e)=>{
+/* enable drop for equipment slots (no change) */
+function enableDrop(slotElement, type){
+  slotElement.ondragover = (e)=> { e.preventDefault(); slotElement.classList.add('highlight'); };
+  slotElement.ondragleave = ()=> slotElement.classList.remove('highlight');
+  slotElement.ondrop = (e)=>{
+    e.preventDefault(); slotElement.classList.remove('highlight');
+    const raw = e.dataTransfer.getData("text/plain");
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.type === 'inv' && parsed.item){
+        const item = parsed.item;
+        const map = { weapon:["sword","pickaxe"], head:["helmet"], chest:["chestplate"], legs:["leggings"], boots:["boots"] };
+        if (!map[type].includes(item)) return;
+        if (player.equipment[type]) player.inv[player.equipment[type]] = (player.inv[player.equipment[type]]||0)+1;
+        if ((player.inv[item]||0) <= 0) return;
+        player.inv[item]--; player.equipment[type] = item; recalcStats(); drawInv(); drawEquipUI();
+      }
+    } catch(e){}
+  };
+}
+
+/* ---------- click interactions: world, collect, place ---------- */
+canvas.addEventListener("mousedown",(e)=>{
+  if (inventoryOpen) return; // paused while inventory open
   const rect = canvas.getBoundingClientRect();
-  const tx = Math.floor((e.clientX - rect.left + camX)/TILE);
-  const ty = Math.floor((e.clientY - rect.top + camY)/TILE);
-  if (inventoryOpen) return; // no interacciones cuando inventario abierto
-  if (Math.abs(tx - player.x) > 2 || Math.abs(ty - player.y) > 2) return;
+  const tx = Math.floor((e.clientX-rect.left + camX)/TILE);
+  const ty = Math.floor((e.clientY-rect.top + camY)/TILE);
+  if (Math.abs(tx-player.x)>2 || Math.abs(ty-player.y)>2) return;
+
   if (e.button === 0){
+    // attack enemy
     for (let i=enemies.length-1;i>=0;i--){ if (enemies[i].x===tx && enemies[i].y===ty){ enemies[i].hp -= player.atk; if (enemies[i].hp<=0) enemies.splice(i,1); return; } }
     const tile = world[ty]?.[tx]; if (!tile) return;
-    if (tile==="tree"){ player.inv.wood++; world[ty][tx]="grass"; if (Math.random()<0.22) player.inv.apple++; drawInv(); }
-    else if (tile==="stone"){ player.inv.stone++; if (Math.random()<0.06) player.inv.coal++; world[ty][tx]="grass"; drawInv(); }
-    else if (tile==="coal"){ player.inv.coal++; world[ty][tx]="grass"; drawInv(); }
-    else if (tile==="iron"){ player.inv.iron++; world[ty][tx]="grass"; drawInv(); }
-    else if (tile==="gold"){ player.inv.gold++; world[ty][tx]="grass"; drawInv(); }
-    else if (tile==="mithril"){ player.inv.mithril++; world[ty][tx]="grass"; drawInv(); }
-    else if (tile==="diamond"){ player.inv.diamond++; world[ty][tx]="grass"; drawInv(); }
-    else if (tile==="ruby"){ player.inv.ruby++; world[ty][tx]="grass"; drawInv(); }
+    if (tile === "tree"){ player.inv.wood++; world[ty][tx]="grass"; if (Math.random()<0.22) player.inv.apple++; drawInv(); }
+    else if (tile === "stone"){ player.inv.stone++; if (Math.random()<0.06) player.inv.coal++; world[ty][tx]="grass"; drawInv(); }
+    else if (tile === "coal"){ player.inv.coal++; world[ty][tx]="grass"; drawInv(); }
+    else if (tile === "iron"){ player.inv.iron++; world[ty][tx]="grass"; drawInv(); }
+    else if (tile === "gold"){ player.inv.gold++; world[ty][tx]="grass"; drawInv(); }
+    else if (tile === "mithril"){ player.inv.mithril++; world[ty][tx]="grass"; drawInv(); }
+    else if (tile === "diamond"){ player.inv.diamond++; world[ty][tx]="grass"; drawInv(); }
+    else if (tile === "ruby"){ player.inv.ruby++; world[ty][tx]="grass"; drawInv(); }
+    refreshHotbarCounts();
   }
+
   if (e.button === 2){
-    const tile = world[ty]?.[tx]; if (!tile) return; if (tile !== "grass") return;
+    const tile = world[ty]?.[tx]; if (!tile) return;
+    if (tile !== "grass") return;
     const sel = selected; if (!sel) return;
     if (!placeable.has(sel)) return;
-    if (sel === "woodBlock" && (player.inv.woodBlock > 0 || gameMode === "creative")){ world[ty][tx] = "woodBlock"; if (gameMode!=="creative") player.inv.woodBlock--; drawInv(); }
-    else if (sel === "stoneBlock" && (player.inv.stoneBlock > 0 || gameMode === "creative")){ world[ty][tx] = "stoneBlock"; if (gameMode!=="creative") player.inv.stoneBlock--; drawInv(); }
+    if (sel === "woodBlock" && (player.inv.woodBlock>0 || gameMode==="creative")){ world[ty][tx]="woodBlock"; if (gameMode!=="creative") player.inv.woodBlock--; drawInv(); refreshHotbarCounts(); }
+    else if (sel === "stoneBlock" && (player.inv.stoneBlock>0 || gameMode==="creative")){ world[ty][tx]="stoneBlock"; if (gameMode!=="creative") player.inv.stoneBlock--; drawInv(); refreshHotbarCounts(); }
   }
 });
-canvas.addEventListener("contextmenu", (e)=>{ e.preventDefault(); });
+canvas.addEventListener("contextmenu", (e)=> e.preventDefault());
 
-/* ========== Crafting / Use ========== */
-function craftPlank(){ if (player.inv.wood >= 1){ player.inv.wood--; player.inv.plank += 4; } drawInv(); }
-function craftWoodBlock(){ if (player.inv.plank >= 4){ player.inv.plank -= 4; player.inv.woodBlock += 1; } drawInv(); }
-function craftStoneBlock(){ if (player.inv.stone >= 4){ player.inv.stone -= 4; player.inv.stoneBlock += 1; } drawInv(); }
-function craftSword(){ if (player.inv.plank >= 2 && player.inv.stone >= 1){ player.inv.plank -= 2; player.inv.stone -= 1; player.inv.sword += 1; } drawInv(); }
-function craftPickaxe(){ if (player.inv.stone >= 3 && player.inv.plank >= 2){ player.inv.stone -= 3; player.inv.plank -= 2; player.inv.pickaxe += 1; } drawInv(); }
-function craftHelmet(){ if (player.inv.plank >= 3){ player.inv.plank -= 3; player.inv.helmet += 1; } drawInv(); }
-function craftChestplate(){ if (player.inv.plank >= 6){ player.inv.plank -= 6; player.inv.chestplate += 1; } drawInv(); }
-function craftLeggings(){ if (player.inv.plank >= 5){ player.inv.plank -= 5; player.inv.leggings += 1; } drawInv(); }
-function craftBoots(){ if (player.inv.plank >= 2){ player.inv.plank -= 2; player.inv.boots += 1; } drawInv(); }
-function useApple(){ if (player.inv.apple > 0){ player.inv.apple--; if (gameMode !== "creative"){ player.hp += 30; if (player.hp > player.maxHp) player.hp = player.maxHp; } } drawInv(); }
+/* ---------- hotbar mousewheel support ---------- */
+window.addEventListener('wheel', (e)=>{
+  // if pointer over UI or inventory open, ignore
+  if (inventoryOpen) return;
+  // ignore when scrolling in menus - only when pointer over canvas or hotbar
+  const tag = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : '';
+  if (['input','textarea','select','button'].includes(tag)) return;
+  const delta = Math.sign(e.deltaY);
+  if (delta === 0) return;
+  if (delta > 0) hotbarIndex = (hotbarIndex + 1) % 9;
+  else hotbarIndex = (hotbarIndex + 9 - 1) % 9;
+  selected = hotbar[hotbarIndex];
+  renderHotbar(); drawInv();
+  e.preventDefault();
+}, { passive:false });
 
-/* ========== DRAW WORLD & ENTITIES ========== */
-ctx.textAlign = "center"; ctx.textBaseline = "middle";
+/* update hotbar counts after inventory changes */
+function refreshHotbarCounts(){
+  const slots = hotbarEl.querySelectorAll('.hot-slot');
+  slots.forEach((s,i)=>{
+    const cnt = s.querySelector('.count');
+    const id = hotbar[i];
+    if (cnt) cnt.textContent = id ? (player.inv[id]||0) : "";
+  });
+}
+
+/* ---------- movement & enemies (pausable while inventory open) ---------- */
+function isBlockingTile(t){ return ["tree","stone","woodBlock","stoneBlock","iron","gold","mithril","diamond","ruby"].includes(t); }
+function recalcStats(){
+  player.atk = player.baseAtk; player.defensePercent = 0; player.extraMaxHp = 0;
+  if (player.equipment.weapon==="sword") player.atk += 8;
+  if (player.equipment.weapon==="pickaxe") player.atk += 2;
+  if (player.equipment.head==="helmet"){ player.defensePercent += 0.06; player.extraMaxHp += 6; }
+  if (player.equipment.chest==="chestplate"){ player.defensePercent += 0.28; player.extraMaxHp += 22; }
+  if (player.equipment.legs==="leggings"){ player.defensePercent += 0.12; player.extraMaxHp += 10; }
+  if (player.equipment.boots==="boots"){ player.defensePercent += 0.05; player.extraMaxHp += 4; }
+  player.defensePercent = Math.min(player.defensePercent, 0.7);
+  player.maxHp = 100 + player.extraMaxHp;
+  if (player.hp > player.maxHp) player.hp = player.maxHp;
+}
+function attemptMove(nx, ny){ if (nx<0||nx>=WORLD_W||ny<0||ny>=WORLD_H) return false; const tile = world[ny][nx]; if (isBlockingTile(tile)) return false; for (let i=enemies.length-1;i>=0;i--){ if (enemies[i].x===nx && enemies[i].y===ny){ enemies[i].hp -= player.atk; if (enemies[i].hp<=0) enemies.splice(i,1); else { const damage = enemies[i].atk*(1-player.defensePercent); if (gameMode!=="creative"){ player.hp -= damage; if (player.hp<0) player.hp=0; } } return false; } } player.x=nx; player.y=ny; return true; }
+function movePlayer(){ if (moveCD>0) return; let moved=false; if (keys["w"]){ if (attemptMove(player.x,player.y-1)) moved=true; } else if (keys["s"]){ if (attemptMove(player.x,player.y+1)) moved=true; } else if (keys["a"]){ if (attemptMove(player.x-1,player.y)) moved=true; } else if (keys["d"]){ if (attemptMove(player.x+1,player.y)) moved=true; } if (moved) moveCD = MOVE_DELAY; }
+function moveEnemies(){ for (const e of enemies){ if (e.moveCD>0) e.moveCD--; else { e.moveCD = 14 + Math.floor(Math.random()*18); const dx = player.x - e.x; const dy = player.y - e.y; const dist = Math.abs(dx)+Math.abs(dy); let moved=false; if (dist < 8){ const tryOrder = Math.abs(dx)>Math.abs(dy) ? [[Math.sign(dx),0],[0,Math.sign(dy)],[0,-Math.sign(dy)],[-Math.sign(dx),0]] : [[0,Math.sign(dy)],[Math.sign(dx),0],[-Math.sign(dx),0],[0,-Math.sign(dy)]]; for (const d of tryOrder){ const nx=e.x+d[0], ny=e.y+d[1]; if (nx<0||nx>=WORLD_W||ny<0||ny>=WORLD_H) continue; if (isBlockingTile(world[ny][nx])) continue; if (enemies.some(o=>o!==e && o.x===nx && o.y===ny)) continue; e.x=nx; e.y=ny; moved=true; break; } } else { const dirs=[[1,0],[-1,0],[0,1],[0,-1]]; for (let t=0;t<6 && !moved;t++){ const d=dirs[Math.floor(Math.random()*dirs.length)]; const nx=e.x+d[0], ny=e.y+d[1]; if (nx<0||nx>=WORLD_W||ny<0||ny>=WORLD_H) continue; if (isBlockingTile(world[ny][nx])) continue; if (enemies.some(o=>o!==e && o.x===nx && o.y===ny)) continue; e.x=nx; e.y=ny; moved=true; break; } } } const md = Math.abs(e.x-player.x)+Math.abs(e.y-player.y); if (md===1){ if (e.attackCD===undefined) e.attackCD=0; if (e.attackCD<=0){ const damage = e.atk*(1-player.defensePercent); if (gameMode!=="creative"){ player.hp -= damage; if (player.hp<0) player.hp=0; } e.attackCD = 24; } else e.attackCD--; } else { if (e.attackCD>0) e.attackCD--; } } }
+
+/* ---------- draw world & UI ---------- */
+ctx.textAlign="center"; ctx.textBaseline="middle";
 function draw(){
-  camX = player.x * TILE - canvas.width/2 + TILE/2;
-  camY = player.y * TILE - canvas.height/2 + TILE/2;
+  camX = player.x*TILE - canvas.width/2 + TILE/2;
+  camY = player.y*TILE - canvas.height/2 + TILE/2;
   ctx.clearRect(0,0,canvas.width,canvas.height);
   for (let y=0;y<WORLD_H;y++){
     for (let x=0;x<WORLD_W;x++){
       const sx = x*TILE - camX, sy = y*TILE - camY;
       if (sx < -TILE || sy < -TILE || sx > canvas.width || sy > canvas.height) continue;
-      ctx.fillStyle = "#3dbb3d"; ctx.fillRect(sx, sy, TILE, TILE);
+      ctx.fillStyle = "#3dbb3d"; ctx.fillRect(sx,sy,TILE,TILE);
       const t = world[y][x];
-      if (t === "tree"){ ctx.font = `${Math.floor(TILE*0.9)}px serif`; ctx.fillStyle = "#000"; ctx.fillText(sprites.tree, sx + TILE/2, sy + TILE/2 - TILE*0.06); }
-      else if (t === "stone"){ ctx.font = `${Math.floor(TILE*0.7)}px serif`; ctx.fillStyle = "#000"; ctx.fillText(sprites.stone, sx + TILE/2, sy + TILE/2 + TILE*0.02); }
-      else if (t === "coal"){ ctx.font = `${Math.floor(TILE*0.6)}px serif`; ctx.fillStyle = "#000"; ctx.fillText("⚫", sx + TILE/2, sy + TILE/2 + TILE*0.02); }
-      else if (t === "woodBlock"){ ctx.font = `${Math.floor(TILE*0.7)}px serif`; ctx.fillStyle = "#000"; ctx.fillText(sprites.woodBlock, sx + TILE/2, sy + TILE/2); }
-      else if (t === "stoneBlock"){ ctx.font = `${Math.floor(TILE*0.7)}px serif`; ctx.fillStyle = "#000"; ctx.fillText(sprites.stoneBlock, sx + TILE/2, sy + TILE/2); }
-      else if (t === "iron"){ ctx.font = `${Math.floor(TILE*0.62)}px serif`; ctx.fillStyle = "#000"; ctx.fillText(sprites.iron, sx + TILE/2, sy + TILE/2); }
-      else if (t === "gold"){ ctx.font = `${Math.floor(TILE*0.62)}px serif`; ctx.fillStyle = "#000"; ctx.fillText(sprites.gold, sx + TILE/2, sy + TILE/2); }
-      else if (t === "mithril"){ ctx.font = `${Math.floor(TILE*0.62)}px serif`; ctx.fillStyle = "#000"; ctx.fillText(sprites.mithril, sx + TILE/2, sy + TILE/2); }
-      else if (t === "diamond"){ ctx.font = `${Math.floor(TILE*0.65)}px serif`; ctx.fillStyle = "#000"; ctx.fillText(sprites.diamond, sx + TILE/2, sy + TILE/2); }
-      else if (t === "ruby"){ ctx.font = `${Math.floor(TILE*0.6)}px serif`; ctx.fillStyle = "#000"; ctx.fillText(sprites.ruby, sx + TILE/2, sy + TILE/2); }
+      if (t === "tree"){ ctx.font=`${Math.floor(TILE*0.9)}px serif`; ctx.fillStyle="#000"; ctx.fillText(sprites.tree, sx+TILE/2, sy+TILE/2 - TILE*0.06); }
+      else if (t==="stone"){ ctx.font=`${Math.floor(TILE*0.7)}px serif`; ctx.fillStyle="#000"; ctx.fillText(sprites.stone, sx+TILE/2, sy+TILE/2 + TILE*0.02); }
+      else if (t==="coal"){ ctx.font=`${Math.floor(TILE*0.6)}px serif`; ctx.fillStyle="#000"; ctx.fillText("⚫", sx+TILE/2, sy+TILE/2 + TILE*0.02); }
+      else if (t==="woodBlock"){ ctx.font=`${Math.floor(TILE*0.7)}px serif`; ctx.fillStyle="#000"; ctx.fillText(sprites.woodBlock, sx+TILE/2, sy+TILE/2); }
+      else if (t==="stoneBlock"){ ctx.font=`${Math.floor(TILE*0.7)}px serif`; ctx.fillStyle="#000"; ctx.fillText(sprites.stoneBlock, sx+TILE/2, sy+TILE/2); }
+      else if (t==="iron"){ ctx.font=`${Math.floor(TILE*0.62)}px serif`; ctx.fillStyle="#000"; ctx.fillText(sprites.iron, sx+TILE/2, sy+TILE/2); }
+      else if (t==="gold"){ ctx.font=`${Math.floor(TILE*0.62)}px serif`; ctx.fillStyle="#000"; ctx.fillText(sprites.gold, sx+TILE/2, sy+TILE/2); }
+      else if (t==="mithril"){ ctx.font=`${Math.floor(TILE*0.62)}px serif`; ctx.fillStyle="#000"; ctx.fillText(sprites.mithril, sx+TILE/2, sy+TILE/2); }
+      else if (t==="diamond"){ ctx.font=`${Math.floor(TILE*0.65)}px serif`; ctx.fillStyle="#000"; ctx.fillText(sprites.diamond, sx+TILE/2, sy+TILE/2); }
+      else if (t==="ruby"){ ctx.font=`${Math.floor(TILE*0.6)}px serif`; ctx.fillStyle="#000"; ctx.fillText(sprites.ruby, sx+TILE/2, sy+TILE/2); }
     }
   }
   const entities = enemies.map(e=>({...e, type:'enemy'})); entities.push({...player, type:'player'});
@@ -536,22 +549,30 @@ function draw(){
     if (sx < -TILE || sy < -TILE || sx > canvas.width || sy > canvas.height) continue;
     const depthOffset = ent.y - player.y; let scale = 1 + (depthOffset * 0.02); scale = Math.max(0.72, Math.min(1.36, scale));
     const cx = sx + TILE/2; const cy = sy + TILE*0.6;
-    ctx.beginPath(); ctx.ellipse(cx, cy, (TILE*0.26)*scale, (TILE*0.1)*scale, 0, 0, Math.PI*2); ctx.fillStyle = "rgba(0,0,0,0.32)"; ctx.fill();
-    const fontSize = Math.floor(42 * scale); ctx.font = `${fontSize}px serif`; ctx.fillStyle = "#000";
-    if (ent.type === 'enemy'){
-      ctx.fillText(sprites.enemy, sx + TILE/2, sy + TILE/2 - (TILE*(scale-1))*0.15);
-      const barW = TILE*0.6*scale, barH = Math.max(4, 6*scale); const px = sx + TILE/2 - barW/2; const py = sy + TILE*0.06;
-      ctx.fillStyle = "black"; ctx.fillRect(px-1, py-1, barW+2, barH+2); ctx.fillStyle = "red"; ctx.fillRect(px, py, barW * Math.max(0, ent.hp)/28, barH);
-    } else { ctx.fillText(sprites.player, sx + TILE/2, sy + TILE/2 - (TILE*(scale-1))*0.15); }
+    ctx.beginPath(); ctx.ellipse(cx, cy, (TILE*0.26)*scale, (TILE*0.1)*scale, 0,0,Math.PI*2); ctx.fillStyle="rgba(0,0,0,0.32)"; ctx.fill();
+    const fontSize = Math.floor(42 * scale); ctx.font = `${fontSize}px serif`; ctx.fillStyle="#000";
+    if (ent.type==='enemy'){ ctx.fillText(sprites.enemy, sx+TILE/2, sy+TILE/2 - (TILE*(scale-1))*0.15); const barW = TILE*0.6*scale, barH=Math.max(4,6*scale); const px = sx+TILE/2 - barW/2; const py = sy + TILE*0.06; ctx.fillStyle="black"; ctx.fillRect(px-1, py-1, barW+2, barH+2); ctx.fillStyle="red"; ctx.fillRect(px, py, barW * Math.max(0, ent.hp)/28, barH); }
+    else { ctx.fillText(sprites.player, sx+TILE/2, sy+TILE/2 - (TILE*(scale-1))*0.15); }
   }
-  ui.innerHTML = `❤️ ${Math.floor(player.hp)}/${player.maxHp} &nbsp;&nbsp; ATK: ${player.atk} &nbsp;&nbsp; SLOT: ${hotbarIndex+1} • Selected: ${selected||"(ninguno)"} • E inventario (pausa)`;
+
+  ui.innerHTML = `❤️ ${Math.floor(player.hp)}/${player.maxHp} &nbsp;&nbsp; ATK: ${player.atk} &nbsp;&nbsp; DEF: ${(player.defensePercent*100).toFixed(0)}% &nbsp; • &nbsp; E: inventario (pausa) • 1–9 hotbar • Arrastra items al hotbar`;
 }
 
-/* ========== GAME LOOP ========== */
+/* ---------- loop and controls ---------- */
+function startNewWorld(mode){
+  createNewWorld();
+  gameMode = mode;
+  gameStarted = true;
+  mainMenu.style.display = "none";
+  if (mode === "creative"){ player.hp=9999; player.maxHp=9999; for (const k in player.inv) player.inv[k]=999; player.baseAtk=50; }
+  else player.baseAtk = 8;
+  recalcStats(); drawInv(); drawEquipUI(); renderHotbar();
+}
+
 function loop(){
   if (!gameStarted){ requestAnimationFrame(loop); return; }
-  if (worldMenuOpen){ requestAnimationFrame(loop); return; }
-  if (inventoryOpen){ pauseOverlay.style.display = "block"; requestAnimationFrame(loop); return; }
+  // pause when worldMenu or inventory open
+  if (worldMenuOpen || inventoryOpen){ pauseOverlay.style.display = inventoryOpen ? "block" : "none"; requestAnimationFrame(loop); return; }
   pauseOverlay.style.display = "none";
   if (moveCD>0) moveCD--;
   movePlayer();
@@ -560,112 +581,65 @@ function loop(){
   draw();
   requestAnimationFrame(loop);
 }
+loop();
 
-/* ========== INPUT (keyboard + wheel) ========== */
-window.addEventListener("keydown", (e)=>{
-  if (e.key === "e"){ e.preventDefault(); toggleInventory(); return; }
-  if (/^[1-9]$/.test(e.key) && gameStarted && !inventoryOpen){ const n=parseInt(e.key,10); hotbarIndex = n-1; selected = hotbar[hotbarIndex]; renderHotbar(); drawInv(); }
-  if (!inventoryOpen) keys[e.key.toLowerCase()] = true;
-  if (!inventoryOpen && e.key.toLowerCase()==='c') toggleCraft();
-  if (!inventoryOpen && e.key.toLowerCase()==='u') useApple();
-  if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase() === "s"){ e.preventDefault(); const name = "save_"+new Date().toISOString().replace(/[:.]/g,'-'); saveWorld(name); }
+/* keyboard */
+window.addEventListener("keydown",(e)=>{
+  if (e.key.toLowerCase()==='e'){ e.preventDefault(); toggleInventory(); return; }
+  if (!inventoryOpen && /^[1-9]$/.test(e.key) && gameStarted){ const n = parseInt(e.key,10); hotbarIndex = n-1; selected = hotbar[hotbarIndex]; renderHotbar(); drawInv(); return; }
+  if (!inventoryOpen){ keys[e.key.toLowerCase()] = true; if (e.key.toLowerCase()==='c') toggleCraft(); if (e.key.toLowerCase()==='u') useApple(); if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='s'){ e.preventDefault(); saveWorld("save_" + new Date().toISOString().replace(/[:.]/g,'-')); } }
 });
-window.addEventListener("keyup", (e)=>{ keys[e.key.toLowerCase()] = false; });
+window.addEventListener("keyup",(e)=>{ keys[e.key.toLowerCase()] = false; });
 
-// wheel for quick hotbar selection when cursor over canvas
-let wheelLock = false;
-canvas.addEventListener("wheel", (e)=>{
-  // prevent page scroll
-  e.preventDefault();
-  if (!gameStarted) return;
-  if (wheelLock) return;
-  wheelLock = true;
-  setTimeout(()=> wheelLock = false, 80);
-  if (e.deltaY > 0) hotbarIndex = (hotbarIndex + 1) % 9;
-  else hotbarIndex = (hotbarIndex + 9 - 1) % 9;
-  selected = hotbar[hotbarIndex];
-  renderHotbar();
-  drawInv();
-}, { passive:false });
-
-/* ========== INVENTORY TOGGLE + ANIMATIONS/SOUNDS ========== */
+/* ---------- inventory open/close animation + sound ---------- */
 function toggleInventory(){
   inventoryOpen = !inventoryOpen;
-  if (inventoryOpen){ invUI.classList.add("open"); invUI.style.display = "flex"; soundOpenInventory(); }
-  else { invUI.classList.remove("open"); invUI.style.display = "none"; soundCloseInventory(); }
+  if (inventoryOpen){
+    invUI.classList.add('open');
+    pauseOverlay.style.display = "block";
+    playOpenSound();
+  } else {
+    invUI.classList.remove('open');
+    pauseOverlay.style.display = "none";
+    playCloseSound();
+  }
   drawInv();
 }
 
-/* ========== HOTBAR / INVENTORY HELPERS ========== */
+/* ---------- crafting/use functions ---------- */
+function craftPlank(){ if (player.inv.wood>=1){ player.inv.wood--; player.inv.plank += 4; drawInv(); refreshHotbarCounts(); } }
+function craftWoodBlock(){ if (player.inv.plank>=4){ player.inv.plank-=4; player.inv.woodBlock++; drawInv(); refreshHotbarCounts(); } }
+function craftStoneBlock(){ if (player.inv.stone>=4){ player.inv.stone-=4; player.inv.stoneBlock++; drawInv(); refreshHotbarCounts(); } }
+function craftSword(){ if (player.inv.plank>=2 && player.inv.stone>=1){ player.inv.plank-=2; player.inv.stone-=1; player.inv.sword++; drawInv(); refreshHotbarCounts(); } }
+function craftPickaxe(){ if (player.inv.stone>=3 && player.inv.plank>=2){ player.inv.stone-=3; player.inv.plank-=2; player.inv.pickaxe++; drawInv(); refreshHotbarCounts(); } }
+function craftHelmet(){ if (player.inv.plank>=3){ player.inv.plank-=3; player.inv.helmet++; drawInv(); refreshHotbarCounts(); } }
+function craftChestplate(){ if (player.inv.plank>=6){ player.inv.plank-=6; player.inv.chestplate++; drawInv(); refreshHotbarCounts(); } }
+function craftLeggings(){ if (player.inv.plank>=5){ player.inv.plank-=5; player.inv.leggings++; drawInv(); refreshHotbarCounts(); } }
+function craftBoots(){ if (player.inv.plank>=2){ player.inv.plank-=2; player.inv.boots++; drawInv(); refreshHotbarCounts(); } }
+function useApple(){ if (player.inv.apple>0){ player.inv.apple--; if (gameMode!=="creative"){ player.hp += 30; if (player.hp>player.maxHp) player.hp = player.maxHp; } drawInv(); refreshHotbarCounts(); } }
+
+/* ---------- save/load basic (kept simple) ---------- */
+function refreshSaveList(){ const sl = document.getElementById("saveList"); sl.innerHTML = "<div style='padding:8px;color:#bbb'>Guardados disponibles (localStorage)</div>"; }
+
+/* ---------- helpers ---------- */
 function refreshHotbarOnInvChange(){
-  // remove hotbar entries that no longer exist in inventory (unless creative)
-  if (gameMode === "creative"){ renderHotbar(); return; }
-  for (let i=0;i<9;i++){ const id=hotbar[i]; if (id && (player.inv[id]||0) <= 0) hotbar[i] = null; }
-  // try to fill empty slots with available items
-  const order = ["wood","stone","plank","woodBlock","stoneBlock","coal","apple","sword","pickaxe","helmet","chestplate","leggings","boots","iron","gold","mithril","diamond","ruby"];
-  for (let i=0;i<9;i++){
-    if (!hotbar[i]){
-      for (const id of order){ if (!hotbar.includes(id) && (player.inv[id]||0)>0){ hotbar[i]=id; break; } }
-    }
-  }
+  // if hotbar contains items that no longer exist in inv, keep reference but update counts (client choice).
   renderHotbar();
+  refreshHotbarCounts();
 }
 
-/* ========== SAVES (lightweight wrappers reused) ========== */
-const GAME_VERSION = "1.1.0";
-const SAVES_KEY = "mc_rpg_saves";
-function getAllSaves(){ try{ const s=localStorage.getItem(SAVES_KEY); return s? JSON.parse(s): {}; } catch(e){ return {}; } }
-function persistAllSaves(obj){ localStorage.setItem(SAVES_KEY, JSON.stringify(obj)); }
-function makeSaveObject(){
-  return { version:GAME_VERSION, timestamp:Date.now(), world: world, player: { x:player.x, y:player.y, inv: player.inv, equipment: player.equipment }, enemies: enemies };
-}
-function saveWorldWithKey(key){
-  if (!key) return alert("Nombre inválido");
-  const saves = getAllSaves();
-  if (saves[key] && saves[key].timestamp && saves[key].timestamp>0){
-    if (!confirm("Sobrescribir "+key+"?")) return;
-  }
-  saves[key] = makeSaveObject();
-  persistAllSaves(saves);
-  playTone(880,120,0.02);
-  alert("Guardado: "+key);
-}
-function saveWorld(name){ if (!name) { alert("Escribe nombre."); return; } saveWorldWithKey(name); }
-function loadWorld(key){
-  const saves = getAllSaves();
-  if (!saves[key]) return alert("No encontrado.");
-  const s = saves[key];
-  world = s.world; player.x = s.player.x; player.y = s.player.y; player.inv = s.player.inv; player.equipment = s.player.equipment; enemies = s.enemies;
-  gameMode = "survival";
-  gameStarted = true; mainMenu.style.display = "none"; recalcStats(); drawInv(); drawEquipUI(); populateHotbarAuto();
-  alert("Cargado: "+key);
-}
-
-/* ========== WORLD SELECTOR (simple) ========== */
-function openWorldSelector(){ worldMenuOpen = true; document.getElementById("worldSelector")?.classList?.add('open'); }
-function closeWorldSelector(){ worldMenuOpen = false; }
-
-/* ========== INIT + UI wiring ========== */
-openSavesBtn.onclick = ()=> {
-  const saves = getAllSaves(); let html = "<h3>Guardados</h3>";
-  for (const k of Object.keys(saves)){ html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid #222"><div>${k}</div><div><button onclick="loadWorld('${k}')">Cargar</button><button onclick="(function(){ if(confirm('Eliminar ${k}?')){ const s=getAllSaves(); delete s['${k}']; persistAllSaves(s); alert('Eliminado'); } })()">Eliminar</button></div></div>`; }
-  savePanel.innerHTML = html;
-  savePanel.style.display = savePanel.style.display === "block" ? "none" : "block";
-};
-
-/* populate default world and start UI */
+/* ---------- initialization ---------- */
 createNewWorld();
 drawInv();
 drawEquipUI();
 renderHotbar();
-draw();
-loop();
 
-/* ========== Resize handler ========== */
-window.addEventListener("resize", ()=>{ canvas.width = innerWidth; canvas.height = innerHeight; draw(); });
+/* ---------- click outside assignMenu handler (already added when opening) ---------- */
+document.addEventListener('keydown', (e)=>{ if (e.key === "Escape"){ assignMenu.style.display='none'; } });
 
-/* small guidance */
-console.log("Controls: WASD move (cooldown). E open/close inventory (pauses). 1-9 hotbar. Mouse wheel over canvas to cycle hotbar. Drag items from inventory to hotbar. Right-click hotbar to assign/clear.");
+/* small console help */
+console.log("Controles: WASD mover (cooldown), C = crafteo, E = inventario (pausa), rueda del ratón cambia hotbar, arrastra items al hotbar o click derecho en ranura para asignar.");
+
 </script>
 </body>
 </html>

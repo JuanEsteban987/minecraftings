@@ -2,13 +2,13 @@
 <html lang="es">
 <head>
 <meta charset="utf-8"/>
-<title>Minecraft RPG Emoji — Hotbar 1-9 + E inventario (pausa) — Drag & Craft</title>
+<title>Minecraft RPG Emoji — Hotbar 1-9 + E abre inventario (pausa)</title>
 <style>
   body{margin:0;background:#222;font-family:Arial, sans-serif;overflow:hidden;color:#eee}
   canvas{display:block;background:#87CEEB;}
   #ui{position:fixed;top:10px;left:10px;background:rgba(0,0,0,0.6);color:#fff;padding:10px;border-radius:10px;font-size:14px;z-index:50;}
   /* INVENTARIO (ahora se muestra/oculta con E) */
-  #inventory{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);display:none;gap:8px;background:rgba(0,0,0,0.7);padding:10px;border-radius:10px;z-index:150;max-width:90vw;overflow:auto;flex-wrap:wrap;}
+  #inventory{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);display:none;gap:8px;background:rgba(0,0,0,0.7);padding:10px;border-radius:10px;z-index:150;max-width:90vw;overflow:auto;}
   .slot{width:60px;height:60px;background:#111;border:2px solid #444;border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-size:26px;position:relative;cursor:pointer;user-select:none;margin:2px;}
   .selected{border-color:#ffd86b; box-shadow: 0 0 14px rgba(255,200,90,0.12) inset;}
   .count{position:absolute;bottom:2px;right:6px;font-size:12px;}
@@ -93,9 +93,6 @@
     .world-mini{ width:72px; height:56px; }
     #togglePocionesBtn{ right:84px; }
   }
-
-  /* small in-game toast */
-  #toast{ position:fixed; bottom:180px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.7); color:#fff; padding:8px 12px; border-radius:8px; z-index:200; display:none; }
 </style>
 </head>
 <body>
@@ -195,13 +192,22 @@
 
 <div id="craftMenu">
   <h3>⚒️ Crafteo</h3>
-  <div id="craftList"></div>
+  <div>
+    <button onclick="craftPlank()">🪵 1 madera → 4 tablones</button><br>
+    <button onclick="craftWoodBlock()">🧱 4 tablones → bloque madera</button><br>
+    <button onclick="craftStoneBlock()">⬜ 4 piedra → bloque piedra</button><br>
+    <hr style="border:0;border-top:1px solid #333;margin:8px 0;">
+    <button onclick="craftHelmet()">🪖 Casco (3 tablones)</button><br>
+    <button onclick="craftChestplate()">🛡️ Pechera (6 tablones)</button><br>
+    <button onclick="craftLeggings()">🩳 Pantalones (5 tablones)</button><br>
+    <button onclick="craftBoots()">👢 Botas (2 tablones)</button><br>
+    <button onclick="craftSword()">⚔️ Espada (2 tablones + 1 piedra)</button><br>
+    <button onclick="craftPickaxe()">⛏️ Pico (3 piedra + 2 tablones)</button><br>
+  </div>
   <div style="margin-top:10px;">
     <button onclick="toggleCraft()">Cerrar</button>
   </div>
 </div>
-
-<div id="toast"></div>
 
 <script>
 /* ================= CONFIG & STATE ================= */
@@ -225,7 +231,6 @@ const openSavesBtn = document.getElementById("openSavesBtn");
 const togglePocionesBtn = document.getElementById("togglePocionesBtn");
 const hotbarEl = document.getElementById("hotbar");
 const pauseOverlay = document.getElementById("pauseOverlay");
-const toast = document.getElementById('toast');
 
 canvas.width = innerWidth;
 canvas.height = innerHeight;
@@ -284,42 +289,6 @@ let autosaveInterval = null;
 function genSeed(){ return Math.floor(Math.random()*0xFFFFFFFF); }
 function clone(obj){ return JSON.parse(JSON.stringify(obj)); }
 
-/* ---------- Crafting recipes ---------- */
-const RECIPES = [
-  { id: 'plank', label: '🪵 1 madera → 4 tablones', needs: { wood:1 }, gives: { plank:4 } },
-  { id: 'woodBlock', label: '🧱 4 tablones → bloque madera', needs: { plank:4 }, gives: { woodBlock:1 } },
-  { id: 'stoneBlock', label: '⬜ 4 piedra → bloque piedra', needs: { stone:4 }, gives: { stoneBlock:1 } },
-  { id: 'helmet', label: '🪖 Casco (3 tablones)', needs: { plank:3 }, gives: { helmet:1 } },
-  { id: 'chestplate', label: '🛡️ Pechera (6 tablones)', needs: { plank:6 }, gives: { chestplate:1 } },
-  { id: 'leggings', label: '🩳 Pantalones (5 tablones)', needs: { plank:5 }, gives: { leggings:1 } },
-  { id: 'boots', label: '👢 Botas (2 tablones)', needs: { plank:2 }, gives: { boots:1 } },
-  { id: 'sword', label: '⚔️ Espada (2 tablones + 1 piedra)', needs: { plank:2, stone:1 }, gives: { sword:1 } },
-  { id: 'pickaxe', label: '⛏️ Pico (3 piedra + 2 tablones)', needs: { stone:3, plank:2 }, gives: { pickaxe:1 } }
-];
-
-function canCraft(recipe){
-  for (const k in recipe.needs){ if ((player.inv[k]||0) < recipe.needs[k]) return false; }
-  return true;
-}
-function craft(recipe){
-  if (!canCraft(recipe)) { showMessage('Recursos insuficientes.'); return false; }
-  for (const k in recipe.needs){ player.inv[k] -= recipe.needs[k]; }
-  for (const k in recipe.gives){ player.inv[k] = (player.inv[k]||0) + recipe.gives[k]; }
-  showMessage('Creado: ' + recipe.label);
-  drawInv(); refreshHotbarOnInvChange(); return true;
-}
-
-function buildCraftUI(){
-  const list = document.getElementById('craftList'); list.innerHTML = '';
-  RECIPES.forEach(r => {
-    const btn = document.createElement('button');
-    btn.textContent = r.label;
-    btn.onclick = ()=> craft(r);
-    list.appendChild(btn);
-    list.appendChild(document.createElement('br'));
-  });
-}
-
 /* ---------- World creation ---------- */
 function createNewWorld(seed = null){
   worldSeed = seed === null ? genSeed() : seed;
@@ -355,15 +324,26 @@ function createNewWorld(seed = null){
   for (let i=0;i<25;i++){
     enemies.push({ x: Math.floor(Math.random()*WORLD_W), y: Math.floor(Math.random()*WORLD_H), hp:28, atk:6, moveCD: Math.floor(Math.random()*30), attackCD:0 });
   }
+
+  // inicializa hotbar automática (llena con los primeros items detectados)
   populateHotbarAuto();
 }
 
 /* ---------- Hotbar ---------- */
 function populateHotbarAuto(){
+  // Llena hotbar con hasta 9 items diferentes que el jugador tenga (orden básico)
   const itemsOrder = ["wood","stone","plank","woodBlock","stoneBlock","coal","apple","sword","pickaxe","helmet","chestplate","leggings","boots","iron","gold","mithril","diamond","ruby"];
-  let idx = 0; hotbar.fill(null);
-  for (const id of itemsOrder){ if (idx >= 9) break; if ((player.inv[id] || 0) > 0){ hotbar[idx++] = id; } }
-  hotbarIndex = 0; renderHotbar();
+  let idx = 0;
+  hotbar.fill(null);
+  for (const id of itemsOrder){
+    if (idx >= 9) break;
+    if ((player.inv[id] || 0) > 0){
+      hotbar[idx++] = id;
+    }
+  }
+  // si hay espacios vacíos, dejarlos null
+  hotbarIndex = 0;
+  renderHotbar();
 }
 function renderHotbar(){
   hotbarEl.innerHTML = "";
@@ -380,27 +360,36 @@ function renderHotbar(){
       slot.appendChild(icon);
       const cnt = document.createElement("div"); cnt.className = "count"; cnt.textContent = (gameMode === "creative") ? "∞" : (player.inv[id] || 0);
       slot.appendChild(cnt);
-      // enable dragging from hotbar to equip/inventory
-      slot.draggable = true;
-      slot.ondragstart = (ev)=>{ ev.dataTransfer.setData("text/plain", id); ev.dataTransfer.setData("source","hotbar"); };
     }
     slot.onclick = ()=> {
-      hotbarIndex = i; selected = hotbar[i]; renderHotbar(); drawInv();
+      hotbarIndex = i;
+      // seleccionar el item como "selected" para colocación/uso
+      selected = hotbar[i];
+      renderHotbar();
+      drawInv(); // para resaltar en inventario si corresponde
     };
     hotbarEl.appendChild(slot);
   }
 }
+
+/* Actualiza la hotbar cuando cambia el inventario (simple heurística) */
 function refreshHotbarOnInvChange(){
+  // Mantener items actuales si aún existen, si no, re-autollenar
   let needFill = false;
   for (let i=0;i<9;i++){
     const id = hotbar[i];
     if (id && (player.inv[id] || 0) <= 0) { hotbar[i] = null; needFill = true; }
   }
   if (needFill){
+    // rellenar con cualquier item disponible
     const itemsOrder = ["wood","stone","plank","woodBlock","stoneBlock","coal","apple","sword","pickaxe","helmet","chestplate","leggings","boots","iron","gold","mithril","diamond","ruby"];
     for (let i=0;i<9;i++){
       if (!hotbar[i]){
-        for (const id of itemsOrder){ if (!hotbar.includes(id) && (player.inv[id] || 0) > 0){ hotbar[i] = id; break; } }
+        for (const id of itemsOrder){
+          if (!hotbar.includes(id) && (player.inv[id] || 0) > 0){
+            hotbar[i] = id; break;
+          }
+        }
       }
     }
   }
@@ -431,7 +420,9 @@ function attemptMove(nx, ny){
       if (enemies[i].hp <= 0) enemies.splice(i,1);
       else {
         const damage = enemies[i].atk * (1 - player.defensePercent);
-        if (gameMode !== "creative") { player.hp -= damage; if (player.hp < 0) player.hp = 0; }
+        if (gameMode !== "creative") {
+          player.hp -= damage; if (player.hp < 0) player.hp = 0;
+        }
       }
       return false;
     }
@@ -441,10 +432,10 @@ function attemptMove(nx, ny){
 function movePlayer(){
   if (moveCD > 0) return;
   let moved = false;
-  if (keys["w"]) { if (attemptMove(player.x, player.y-1)) moved=true; }
-  else if (keys["s"]) { if (attemptMove(player.x, player.y+1)) moved=true; }
-  else if (keys["a"]) { if (attemptMove(player.x-1, player.y)) moved=true; }
-  else if (keys["d"]) { if (attemptMove(player.x+1, player.y)) moved=true; }
+  if (keys["w"]){ if (attemptMove(player.x, player.y-1)) moved=true; }
+  else if (keys["s"]){ if (attemptMove(player.x, player.y+1)) moved=true; }
+  else if (keys["a"]){ if (attemptMove(player.x-1, player.y)) moved=true; }
+  else if (keys["d"]){ if (attemptMove(player.x+1, player.y)) moved=true; }
   if (moved) moveCD = MOVE_DELAY;
 }
 function moveEnemies(){
@@ -483,7 +474,9 @@ function moveEnemies(){
       if (e.attackCD === undefined) e.attackCD = 0;
       if (e.attackCD <= 0){
         const damage = e.atk * (1 - player.defensePercent);
-        if (gameMode !== "creative") { player.hp -= damage; if (player.hp < 0) player.hp = 0; }
+        if (gameMode !== "creative") {
+          player.hp -= damage; if (player.hp < 0) player.hp = 0;
+        }
         e.attackCD = 24;
       } else e.attackCD--;
     } else { if (e.attackCD > 0) e.attackCD--; }
@@ -513,34 +506,10 @@ function unequipSlot(slot){
   if (!val) return;
   player.inv[val] = (player.inv[val] || 0) + 1;
   player.equipment[slot] = null;
-  recalcStats(); drawInv(); drawEquipUI(); refreshHotbarOnInvChange();
-}
-
-/* drop target enabling for equip slots */
-function enableDrop(slotElement, type){
-  slotElement.ondragover = (e)=> { e.preventDefault(); slotElement.classList.add('highlight'); };
-  slotElement.ondragleave = ()=> slotElement.classList.remove('highlight');
-  slotElement.ondrop = (e)=>{
-    e.preventDefault(); slotElement.classList.remove('highlight');
-    const item = e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("item");
-    const source = e.dataTransfer.getData("source") || '';
-    if(!item) return;
-    const map = { weapon:["sword","pickaxe"], head:["helmet"], chest:["chestplate"], legs:["leggings"], boots:["boots"] };
-    if(!map[type].includes(item)) return;
-    // if source is 'equip:other' then swapping
-    if (player.equipment[type]) player.inv[player.equipment[type]] = (player.inv[player.equipment[type]]||0)+1;
-    if ((player.inv[item]||0) <= 0 && source.indexOf('equip:')!==0 && gameMode !== "creative") { showMessage('No tienes ese objeto para equipar.'); return; }
-    if (source.indexOf('equip:')===0){
-      // dragging from another equip slot (shouldn't normally happen) - just swap
-      // remove from its slot
-      const from = source.split(':')[1];
-      player.equipment[from] = null;
-    } else {
-      if (gameMode !== "creative") player.inv[item]--;
-    }
-    player.equipment[type] = item;
-    recalcStats(); drawInv(); drawEquipUI(); refreshHotbarOnInvChange();
-  };
+  recalcStats();
+  drawInv();
+  drawEquipUI();
+  refreshHotbarOnInvChange();
 }
 
 /* ---------- Click interactions ---------- */
@@ -565,7 +534,7 @@ canvas.addEventListener("mousedown", (e) => {
     }
     const tile = world[ty]?.[tx];
     if (!tile) return;
-    // recolección de recursos
+    // recolección de recursos: árboles, piedra, carbón, nuevos minerales
     if (tile === "tree"){ player.inv.wood++; world[ty][tx] = "grass"; if (Math.random() < 0.22) player.inv.apple++; drawInv(); refreshHotbarOnInvChange(); }
     else if (tile === "stone"){ player.inv.stone++; if (Math.random() < 0.06) player.inv.coal++; world[ty][tx] = "grass"; drawInv(); refreshHotbarOnInvChange(); }
     else if (tile === "coal"){ player.inv.coal++; world[ty][tx] = "grass"; drawInv(); refreshHotbarOnInvChange(); }
@@ -596,49 +565,42 @@ canvas.addEventListener("mousedown", (e) => {
 canvas.addEventListener("contextmenu", e => { e.preventDefault(); });
 
 /* ---------- Crafting & use ---------- */
-function craftPlank(){ craft(RECIPES[0]); }
-function craftWoodBlock(){ craft(RECIPES[1]); }
-function craftStoneBlock(){ craft(RECIPES[2]); }
-function craftSword(){ craft(RECIPES.find(r=>r.id==='sword')); }
-function craftPickaxe(){ craft(RECIPES.find(r=>r.id==='pickaxe')); }
-function craftHelmet(){ craft(RECIPES.find(r=>r.id==='helmet')); }
-function craftChestplate(){ craft(RECIPES.find(r=>r.id==='chestplate')); }
-function craftLeggings(){ craft(RECIPES.find(r=>r.id==='leggings')); }
-function craftBoots(){ craft(RECIPES.find(r=>r.id==='boots')); }
+function craftPlank(){ if (player.inv.wood >= 1){ player.inv.wood -= 1; player.inv.plank += 4; } drawInv(); refreshHotbarOnInvChange(); }
+function craftWoodBlock(){ if (player.inv.plank >= 4){ player.inv.plank -= 4; player.inv.woodBlock += 1; } drawInv(); refreshHotbarOnInvChange(); }
+function craftStoneBlock(){ if (player.inv.stone >= 4){ player.inv.stone -= 4; player.inv.stoneBlock += 1; } drawInv(); refreshHotbarOnInvChange(); }
+function craftSword(){ if (player.inv.plank >= 2 && player.inv.stone >= 1){ player.inv.plank -= 2; player.inv.stone -= 1; player.inv.sword += 1; } drawInv(); refreshHotbarOnInvChange(); }
+function craftPickaxe(){ if (player.inv.stone >= 3 && player.inv.plank >= 2){ player.inv.stone -= 3; player.inv.plank -= 2; player.inv.pickaxe += 1; } drawInv(); refreshHotbarOnInvChange(); }
+function craftHelmet(){ if (player.inv.plank >= 3){ player.inv.plank -= 3; player.inv.helmet += 1; } drawInv(); refreshHotbarOnInvChange(); }
+function craftChestplate(){ if (player.inv.plank >= 6){ player.inv.plank -= 6; player.inv.chestplate += 1; } drawInv(); refreshHotbarOnInvChange(); }
+function craftLeggings(){ if (player.inv.plank >= 5){ player.inv.plank -= 5; player.inv.leggings += 1; } drawInv(); refreshHotbarOnInvChange(); }
+function craftBoots(){ if (player.inv.plank >= 2){ player.inv.plank -= 2; player.inv.boots += 1; } drawInv(); refreshHotbarOnInvChange(); }
 function toggleCraft(){ craftUI.style.display = craftUI.style.display === "block" ? "none" : "block"; }
 function useApple(){ if (player.inv.apple > 0){ player.inv.apple--; if (gameMode !== "creative"){ player.hp += 30; if (player.hp > player.maxHp) player.hp = player.maxHp; } } drawInv(); refreshHotbarOnInvChange(); }
 
-/* ---------- Drag helpers for returning equipment to inventory ---------- */
-// allow drops on inventory to unequip
-invUI.ondragover = (e)=> { e.preventDefault(); invUI.style.outline = '2px dashed rgba(255,255,255,0.06)'; };
-invUI.ondragleave = ()=> { invUI.style.outline = ''; };
-invUI.ondrop = (e)=>{
-  e.preventDefault(); invUI.style.outline = '';
-  const item = e.dataTransfer.getData('text/plain');
-  const source = e.dataTransfer.getData('source') || '';
-  if (!item) return;
-  if (source.indexOf('equip:')===0){
-    const slot = source.split(':')[1];
-    if (player.equipment[slot]){
-      player.inv[player.equipment[slot]] = (player.inv[player.equipment[slot]]||0)+1;
-      player.equipment[slot] = null;
-      recalcStats(); drawInv(); drawEquipUI(); refreshHotbarOnInvChange();
-      showMessage('Objeto devuelto al inventario');
-    }
-    return;
-  }
-  // dropping from hotbar or inventory -> don't duplicate, but if from hotbar and player has resource, do nothing.
-};
-
-/* ---------- Drag & Drop equip helpers: equip slots are draggable out to inventory ---------- */
-function makeEquippedDraggable(innerDiv, slotName, itemId){
-  innerDiv.draggable = true;
-  innerDiv.ondragstart = (ev)=>{ ev.dataTransfer.setData('text/plain', itemId); ev.dataTransfer.setData('source','equip:'+slotName); ev.dataTransfer.setDragImage(innerDiv, 12, 12); };
+/* ---------- Drag & Drop equip helpers ---------- */
+function enableDrop(slotElement, type){
+  slotElement.ondragover = (e)=> { e.preventDefault(); slotElement.classList.add('highlight'); };
+  slotElement.ondragleave = ()=> slotElement.classList.remove('highlight');
+  slotElement.ondrop = (e)=>{
+    e.preventDefault();
+    slotElement.classList.remove('highlight');
+    const item = e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("item");
+    if(!item) return;
+    const map = { weapon:["sword","pickaxe"], head:["helmet"], chest:["chestplate"], legs:["leggings"], boots:["boots"] };
+    if(!map[type].includes(item)) return;
+    if(player.equipment[type]) player.inv[player.equipment[type]] = (player.inv[player.equipment[type]]||0)+1;
+    if ((player.inv[item]||0) <= 0 && gameMode !== "creative") return;
+    if (gameMode !== "creative") player.inv[item]--;
+    player.equipment[type] = item;
+    recalcStats(); drawInv(); drawEquipUI(); refreshHotbarOnInvChange();
+  };
 }
 
 /* ---------- UI: inventory & equip drawing (click to use) ---------- */
 function drawInv(){
+  // muestra/oculta inventario según inventoryOpen
   invUI.style.display = inventoryOpen ? "flex" : "none";
+
   invUI.innerHTML = "";
   const itemsOrder = [
     ["🌳","wood"], ["🗿","stone"], ["🪵","plank"], ["🧱","woodBlock"], ["⬜","stoneBlock"],
@@ -657,15 +619,39 @@ function drawInv(){
       slot.draggable = true;
       slot.dataset.item = id;
 
-      // CLICK = equipar / usar / seleccionar
+      // CLICK = equipar / usar / seleccionar (comportamiento consolidado)
       slot.onclick = ()=> {
-        if (isEquippable(id)){ equipFromInv(id); selected = null; drawInv(); return; }
-        if (id === "apple"){ useApple(); selected = null; drawInv(); return; }
-        if (placeable.has(id)){ if (selected === id) selected = null; else selected = id; drawInv(); return; }
-        if (selected === id) selected = null; else selected = id; drawInv();
+        // 1) si es equipable -> equipar
+        if (isEquippable(id)){
+          equipFromInv(id);
+          selected = null;
+          drawInv();
+          return;
+        }
+
+        // 2) si es comida -> consumir inmediatamente
+        if (id === "apple"){
+          useApple();
+          selected = null;
+          drawInv();
+          return;
+        }
+
+        // 3) si es colocable -> seleccionar para colocar con click derecho
+        if (placeable.has(id)){
+          if (selected === id) selected = null;
+          else selected = id;
+          drawInv();
+          return;
+        }
+
+        // 4) otros items (minerales) -> los seleccionamos para verlos (o futuras acciones)
+        if (selected === id) selected = null;
+        else selected = id;
+        drawInv();
       };
 
-      slot.ondragstart = (ev)=>{ ev.dataTransfer.setData("text/plain", id); ev.dataTransfer.setData("source","inv"); ev.dataTransfer.setData("item", id); };
+      slot.ondragstart = (ev)=>{ ev.dataTransfer.setData("text/plain", id); ev.dataTransfer.setData("item", id); };
 
       slot.ondblclick = ()=> { if (isEquippable(id)) equipFromInv(id); };
 
@@ -692,8 +678,6 @@ function drawEquipUI(){
       div.className = "slot equipped";
       div.textContent = itemIcons[equippedId] || sprites[equippedId] || "?";
       slotElem.appendChild(div);
-      // make equipped item draggable back to inventory
-      makeEquippedDraggable(div, type, equippedId);
     } else {
       const ghostDiv = document.createElement("div");
       ghostDiv.className = "slot ghost";
@@ -702,7 +686,11 @@ function drawEquipUI(){
     }
     if (type === "weapon"){
       slotElem.onclick = ()=> {
-        if (player.equipment.weapon){ player.inv[player.equipment.weapon] = (player.inv[player.equipment.weapon]||0)+1; player.equipment.weapon = null; recalcStats(); drawInv(); drawEquipUI(); refreshHotbarOnInvChange(); }
+        if (player.equipment.weapon){
+          player.inv[player.equipment.weapon] = (player.inv[player.equipment.weapon]||0)+1;
+          player.equipment.weapon = null;
+          recalcStats(); drawInv(); drawEquipUI(); refreshHotbarOnInvChange();
+        }
       };
     } else {
       const slotNameMap = { head: "head", chest: "chest", legs: "legs", boots: "boots" };
@@ -767,21 +755,33 @@ function draw(){
     }
   }
 
+  // UI: add "Mundos" button that opens the world selector + save panel
   ui.innerHTML = `❤️ ${Math.floor(player.hp)}/${player.maxHp} &nbsp;&nbsp; ATK: ${player.atk} &nbsp;&nbsp; DEF: ${(player.defensePercent*100).toFixed(0)}%<br>
     W A S D mover (con cooldown) • 1-9 hotbar • E: inventario (pausa) • Click en inventario = usar/equipar/seleccionar`;
+  // drawInv() no lo llamamos aquí para evitar bucles; lo llamamos cuando hace falta
 }
 
 /* ---------- Game start / loop ---------- */
 function startNewWorld(mode){
   createNewWorld();
-  gameMode = mode; gameStarted = true; mainMenu.style.display = "none";
-  if (mode === "creative"){ player.hp = 9999; player.maxHp = 9999; for (let k in player.inv) player.inv[k]=999; player.baseAtk = 50; } else player.baseAtk = 8;
-  recalcStats(); drawInv(); drawEquipUI(); buildCraftUI(); renderHotbar();
+  gameMode = mode;
+  gameStarted = true;
+  mainMenu.style.display = "none";
+  if (mode === "creative"){
+    player.hp = 9999; player.maxHp = 9999; for (let k in player.inv) player.inv[k]=999; player.baseAtk = 50;
+  } else player.baseAtk = 8;
+  recalcStats(); drawInv(); drawEquipUI();
+  renderHotbar();
 }
 
 function loop(){
   if (!gameStarted){ requestAnimationFrame(loop); return; }
-  if (worldMenuOpen || inventoryOpen){ pauseOverlay.style.display = inventoryOpen ? "block" : "none"; requestAnimationFrame(loop); return; }
+  if (worldMenuOpen || inventoryOpen){ // pausar si menú de mundos o inventario abierto
+    // muestra overlay cuando inventario abierto
+    pauseOverlay.style.display = inventoryOpen ? "block" : "none";
+    requestAnimationFrame(loop);
+    return;
+  }
   pauseOverlay.style.display = "none";
   if (moveCD>0) moveCD--;
   movePlayer();
@@ -796,47 +796,310 @@ loop();
 window.addEventListener("resize", ()=>{ canvas.width = innerWidth; canvas.height = innerHeight; });
 
 window.addEventListener("keydown", (e)=>{
-  if (e.key === "e"){ e.preventDefault(); toggleInventory(); return; }
-  if (!inventoryOpen && gameStarted && /^[1-9]$/.test(e.key)){
-    const n = parseInt(e.key,10); hotbarIndex = n-1; selected = hotbar[hotbarIndex]; renderHotbar(); drawInv();
+  // evitar que cuando inventario abierto, las teclas afecten movimiento
+  if (e.key === "e"){
+    e.preventDefault();
+    toggleInventory();
+    return;
   }
-  if (!inventoryOpen){ keys[e.key.toLowerCase()] = true;
-    if (e.key === "c"){ toggleCraft(); }
-    if (e.key === "u"){ useApple(); }
-    if (e.key === "Escape"){ if (worldMenuOpen) toggleWorldMenu(); }
+
+  // hotbar keys 1..9
+  if (!inventoryOpen && gameStarted && /^[1-9]$/.test(e.key)){
+    const n = parseInt(e.key,10);
+    hotbarIndex = n-1;
+    selected = hotbar[hotbarIndex];
+    renderHotbar();
+    drawInv();
+  }
+
+  // movimiento (solo si inventario no abierto)
+  if (!inventoryOpen){
+    keys[e.key.toLowerCase()] = true;
+    if (e.key === "c"){ // 'c' para crafteo ahora (antes era 'e')
+      toggleCraft();
+    }
+    if (e.key === "u"){
+      useApple();
+    }
+    if (e.key === "Escape"){
+      if (worldMenuOpen) toggleWorldMenu();
+    }
+    // guardar con Ctrl/Cmd+S
     if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase() === "s"){ e.preventDefault(); const suggested = "save_" + new Date().toISOString().replace(/[:.]/g,'-'); saveWorld(suggested); }
   }
 });
+
 window.addEventListener("keyup", (e)=>{ keys[e.key.toLowerCase()] = false; });
 
 /* ---------- Inventory toggle (E) ---------- */
-function toggleInventory(){ inventoryOpen = !inventoryOpen; invUI.style.display = inventoryOpen ? "flex" : "none"; pauseOverlay.style.display = inventoryOpen ? "block" : "none"; if (inventoryOpen) drawInv(); else drawInv(); }
+function toggleInventory(){
+  inventoryOpen = !inventoryOpen;
+  invUI.style.display = inventoryOpen ? "flex" : "none";
+  // mostrar overlay visual cuando inventario abierto
+  pauseOverlay.style.display = inventoryOpen ? "block" : "none";
+  // si abres inventario, también mostrar inventario y detener el tiempo (handled in loop)
+  if (inventoryOpen){
+    drawInv();
+  } else {
+    drawInv();
+  }
+}
 
 /* ---------- Saving system (localStorage) (sin cambios de comportamiento) ---------- */
-function getAllSaves(){ try { const raw = localStorage.getItem(SAVES_KEY); if (!raw) return {}; return JSON.parse(raw); } catch (e) { console.error("Error leyendo saves:", e); return {}; } }
+function getAllSaves(){
+  try { const raw = localStorage.getItem(SAVES_KEY); if (!raw) return {}; return JSON.parse(raw); } catch (e) { console.error("Error leyendo saves:", e); return {}; }
+}
 function persistAllSaves(obj){ localStorage.setItem(SAVES_KEY, JSON.stringify(obj)); }
-function makeSaveObject(){ return { version: GAME_VERSION, timestamp: Date.now(), gameMode, seed: worldSeed, minimap: makeMinimap(world, 20), world: clone(world), player: { x: player.x, y: player.y, hp: player.hp, maxHp: player.maxHp, baseAtk: player.baseAtk, inv: clone(player.inv), equipment: clone(player.equipment) }, enemies: clone(enemies) }; }
-function saveWorldWithKey(key){ if (!key) return alert("Key de guardado inválida."); const saves = getAllSaves(); if (saves[key] && saves[key].timestamp && saves[key].timestamp > 0){ if (!confirm("El guardado '" + key + "' ya existe. ¿Sobrescribirlo?")) return; } saves[key] = makeSaveObject(); persistAllSaves(saves); refreshSaveList(); flashSaveBtn(); playSaveSound(); }
-function saveWorld(name){ if (!name) { alert("Escribe un nombre para el guardado."); return; } saveWorldWithKey(name); saveNameInput.value = ""; }
-function loadWorld(key){ const saves = getAllSaves(); const s = saves[key]; if (!s){ alert("Guardado no encontrado."); return; } try { if (!s.world) throw new Error("Save corrupto (no world)."); world = clone(s.world); player.x = s.player.x; player.y = s.player.y; player.hp = s.player.hp; player.maxHp = s.player.maxHp; player.baseAtk = s.player.baseAtk; player.inv = s.player.inv || {}; player.equipment = s.player.equipment || {weapon:null, head:null, chest:null, legs:null, boots:null}; enemies = clone(s.enemies || []); worldSeed = s.seed || null; gameMode = s.gameMode || "survival"; gameStarted = true; mainMenu.style.display = "none"; closeWorldSelector(); savePanel.style.display = "none"; recalcStats(); drawInv(); drawEquipUI(); populateHotbarAuto(); alert("Mundo cargado: " + key); } catch (err){ console.error("Error al cargar save:", err); alert("Error cargando guardado (revisa consola)."); } }
-function deleteSave(key){ if (!confirm("Eliminar guardado '" + key + "'?")) return; const saves = getAllSaves(); delete saves[key]; persistAllSaves(saves); refreshSaveList(); }
-function downloadSave(key){ const saves = getAllSaves(); const s = saves[key]; if (!s) { alert("Save no encontrado."); return; } const blob = new Blob([JSON.stringify(s, null, 2)], {type: "application/json"}); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `${key}.json`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
-function downloadAllSaves(){ const saves = getAllSaves(); const blob = new Blob([JSON.stringify(saves, null, 2)], {type: "application/json"}); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `mc_rpg_all_saves.json`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
-function importSavesFile(file){ const reader = new FileReader(); reader.onload = (ev) => { try { const data = JSON.parse(ev.target.result); if (typeof data === "object" && Object.keys(data).length > 0) { const saves = getAllSaves(); for (const k of Object.keys(data)) saves[k] = data[k]; persistAllSaves(saves); refreshSaveList(); alert("Importado correctamente."); } else alert("Formato inválido."); } catch (err){ console.error(err); alert("Archivo inválido JSON."); } }; reader.readAsText(file); }
-function clearAllSaves(){ if (!confirm("Eliminar TODOS los guardados? Esto no se puede deshacer.")) return; localStorage.removeItem(SAVES_KEY); refreshSaveList(); }
-function setAutosave(on){ autosaveEnabled = !!on; autosaveToggle.textContent = "Autosave: " + (autosaveEnabled ? "ON" : "OFF"); if (autosaveInterval) { clearInterval(autosaveInterval); autosaveInterval = null; } if (autosaveEnabled){ autosaveInterval = setInterval(()=> { saveWorldWithKey("_autosave_"); console.log("Autosave saved"); }, AUTOSAVE_MS); } }
-window.addEventListener("beforeunload", (e)=>{ try { saveWorldWithKey("_autosave_on_exit"); } catch (err) { console.warn("Auto save on exit failed", err); } });
+
+function makeSaveObject(){
+  return {
+    version: GAME_VERSION,
+    timestamp: Date.now(),
+    gameMode,
+    seed: worldSeed,
+    minimap: makeMinimap(world, 20),
+    world: clone(world),
+    player: {
+      x: player.x, y: player.y, hp: player.hp, maxHp: player.maxHp, baseAtk: player.baseAtk,
+      inv: clone(player.inv),
+      equipment: clone(player.equipment)
+    },
+    enemies: clone(enemies)
+  };
+}
+
+/* Save with confirmation if overwriting an existing save */
+function saveWorldWithKey(key){
+  if (!key) return alert("Key de guardado inválida.");
+  const saves = getAllSaves();
+
+  if (saves[key] && saves[key].timestamp && saves[key].timestamp > 0){
+    if (!confirm("El guardado '" + key + "' ya existe. ¿Sobrescribirlo?")) return;
+  }
+
+  saves[key] = makeSaveObject();
+  persistAllSaves(saves);
+  refreshSaveList();
+  flashSaveBtn();
+  playSaveSound();
+}
+
+/* Named save wrapper */
+function saveWorld(name){
+  if (!name) { alert("Escribe un nombre para el guardado."); return; }
+  saveWorldWithKey(name);
+  saveNameInput.value = "";
+}
+
+/* load world from save key */
+function loadWorld(key){
+  const saves = getAllSaves();
+  const s = saves[key];
+  if (!s){ alert("Guardado no encontrado."); return; }
+  try {
+    if (!s.world) throw new Error("Save corrupto (no world).");
+    world = clone(s.world);
+    player.x = s.player.x; player.y = s.player.y;
+    player.hp = s.player.hp; player.maxHp = s.player.maxHp; player.baseAtk = s.player.baseAtk;
+    player.inv = s.player.inv || {}; player.equipment = s.player.equipment || {weapon:null, head:null, chest:null, legs:null, boots:null};
+    enemies = clone(s.enemies || []);
+    worldSeed = s.seed || null;
+    gameMode = s.gameMode || "survival";
+    gameStarted = true; mainMenu.style.display = "none"; closeWorldSelector(); savePanel.style.display = "none";
+    recalcStats(); drawInv(); drawEquipUI();
+    populateHotbarAuto();
+    alert("Mundo cargado: " + key);
+  } catch (err){
+    console.error("Error al cargar save:", err);
+    alert("Error cargando guardado (revisa consola).");
+  }
+}
+
+function deleteSave(key){
+  if (!confirm("Eliminar guardado '" + key + "'?")) return;
+  const saves = getAllSaves();
+  delete saves[key];
+  persistAllSaves(saves);
+  refreshSaveList();
+}
+function downloadSave(key){
+  const saves = getAllSaves(); const s = saves[key];
+  if (!s) { alert("Save no encontrado."); return; }
+  const blob = new Blob([JSON.stringify(s, null, 2)], {type: "application/json"});
+  const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `${key}.json`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+function downloadAllSaves(){
+  const saves = getAllSaves(); const blob = new Blob([JSON.stringify(saves, null, 2)], {type: "application/json"}); const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = `mc_rpg_all_saves.json`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+function importSavesFile(file){
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (typeof data === "object" && Object.keys(data).length > 0) {
+        const saves = getAllSaves();
+        for (const k of Object.keys(data)) saves[k] = data[k];
+        persistAllSaves(saves);
+        refreshSaveList(); alert("Importado correctamente.");
+      } else alert("Formato inválido.");
+    } catch (err){ console.error(err); alert("Archivo inválido JSON."); }
+  };
+  reader.readAsText(file);
+}
+function clearAllSaves(){
+  if (!confirm("Eliminar TODOS los guardados? Esto no se puede deshacer.")) return;
+  localStorage.removeItem(SAVES_KEY);
+  refreshSaveList();
+}
+
+/* autosave */
+function setAutosave(on){
+  autosaveEnabled = !!on;
+  autosaveToggle.textContent = "Autosave: " + (autosaveEnabled ? "ON" : "OFF");
+  if (autosaveInterval) { clearInterval(autosaveInterval); autosaveInterval = null; }
+  if (autosaveEnabled){
+    autosaveInterval = setInterval(()=> { saveWorldWithKey("_autosave_"); console.log("Autosave saved"); }, AUTOSAVE_MS);
+  }
+}
+
+/* always autosave on unload */
+window.addEventListener("beforeunload", (e)=>{
+  try { saveWorldWithKey("_autosave_on_exit"); } catch (err) { console.warn("Auto save on exit failed", err); }
+});
 
 /* ---------- Save list UI + minimap preview ---------- */
-function makeMinimap(worldArr, size=20){ const h = worldArr.length; const w = worldArr[0].length; const sx = Math.max(1, Math.floor(w/size)); const sy = Math.max(1, Math.floor(h/size)); const map = []; for (let my = 0; my < size; my++){ const row = []; for (let mx = 0; mx < size; mx++){ const wx = Math.min(w-1, mx*sx); const wy = Math.min(h-1, my*sy); row.push(worldArr[wy][wx] || "grass"); } map.push(row); } return { size, grid: map }; }
-function colorForTile(t){ switch(t){ case "tree": return "#0b8b1e"; case "stone": return "#8d8d8d"; case "coal": return "#333"; case "woodBlock": return "#8b5a2b"; case "stoneBlock": return "#cfcfcf"; case "iron": return "#b08b57"; case "gold": return "#d4af37"; case "mithril": return "#5aa0d3"; case "diamond": return "#2ec4ff"; case "ruby": return "#c72c48"; case "grass": default: return "#3dbb3d"; } }
-function renderMinimapToCanvas(minimap, canvasElem){ const size = minimap?.size || 20; const grid = minimap?.grid || null; const cw = canvasElem.width = canvasElem.clientWidth || 92; const ch = canvasElem.height = canvasElem.clientHeight || 64; const pxW = cw / size; const pxH = ch / size; const ctx2 = canvasElem.getContext("2d"); ctx2.clearRect(0,0,cw,ch); if (!grid){ ctx2.fillStyle = "#111"; ctx2.fillRect(0,0,cw,ch); ctx2.fillStyle = "#777"; ctx2.font = "10px sans-serif"; ctx2.fillText("No preview",10,ch/2); return; } for (let y=0;y<size;y++){ for (let x=0;x<size;x++){ const t = grid[y][x]; ctx2.fillStyle = colorForTile(t); ctx2.fillRect(Math.floor(x*pxW), Math.floor(y*pxH), Math.ceil(pxW), Math.ceil(pxH)); } } }
-function refreshSaveList(){ const saves = getAllSaves(); const saveList = document.getElementById("saveList"); saveList.innerHTML = ""; const keys = Object.keys(saves).sort((a,b) => (saves[b].timestamp||0)-(saves[a].timestamp||0)); if (keys.length === 0) saveList.innerHTML = "<div style='color:#bbb;padding:6px'>No hay guardados.</div>"; keys.forEach(name => { const row = document.createElement("div"); row.className = "save-row"; const meta = saves[name]; const date = meta && meta.timestamp ? new Date(meta.timestamp).toLocaleString() : "(vacío)"; const left = document.createElement("div"); left.className = "save-left"; const card = document.createElement("div"); card.className = "save-card"; const cvs = document.createElement("canvas"); cvs.style.width="100%"; cvs.style.height="100%"; card.appendChild(cvs); left.appendChild(card); const metaDiv = document.createElement("div"); metaDiv.className="save-meta"; metaDiv.innerHTML = `<b>${name}</b><span class="date">${date}</span>`; left.appendChild(metaDiv); row.appendChild(left); const btns = document.createElement("div"); btns.style.display = "flex"; const load = document.createElement("button"); load.textContent = "Cargar"; load.onclick = ()=> loadWorld(name); const download = document.createElement("button"); download.textContent = "Exportar"; download.onclick = ()=> downloadSave(name); const del = document.createElement("button"); del.textContent = "Eliminar"; del.onclick = ()=> { deleteSave(name); }; btns.appendChild(load); btns.appendChild(download); btns.appendChild(del); row.appendChild(btns); saveList.appendChild(row); setTimeout(()=> { try { renderMinimapToCanvas(saves[name].minimap, cvs); } catch(e){ console.warn(e); } }, 0); }); updateQuickMetaUI(); if (worldSelector.style.display === "flex") populateWorldSelector(); }
+function makeMinimap(worldArr, size=20){
+  const h = worldArr.length;
+  const w = worldArr[0].length;
+  const sx = Math.max(1, Math.floor(w/size));
+  const sy = Math.max(1, Math.floor(h/size));
+  const map = [];
+  for (let my = 0; my < size; my++){
+    const row = [];
+    for (let mx = 0; mx < size; mx++){
+      const wx = Math.min(w-1, mx*sx);
+      const wy = Math.min(h-1, my*sy);
+      row.push(worldArr[wy][wx] || "grass");
+    }
+    map.push(row);
+  }
+  return { size, grid: map };
+}
+function colorForTile(t){
+  switch(t){
+    case "tree": return "#0b8b1e";
+    case "stone": return "#8d8d8d";
+    case "coal": return "#333";
+    case "woodBlock": return "#8b5a2b";
+    case "stoneBlock": return "#cfcfcf";
+    case "iron": return "#b08b57";
+    case "gold": return "#d4af37";
+    case "mithril": return "#5aa0d3";
+    case "diamond": return "#2ec4ff";
+    case "ruby": return "#c72c48";
+    case "grass": default: return "#3dbb3d";
+  }
+}
+function renderMinimapToCanvas(minimap, canvasElem){
+  const size = minimap?.size || 20;
+  const grid = minimap?.grid || null;
+  const cw = canvasElem.width = canvasElem.clientWidth || 92;
+  const ch = canvasElem.height = canvasElem.clientHeight || 64;
+  const pxW = cw / size;
+  const pxH = ch / size;
+  const ctx2 = canvasElem.getContext("2d");
+  ctx2.clearRect(0,0,cw,ch);
+  if (!grid){
+    ctx2.fillStyle = "#111"; ctx2.fillRect(0,0,cw,ch);
+    ctx2.fillStyle = "#777"; ctx2.font = "10px sans-serif"; ctx2.fillText("No preview",10,ch/2);
+    return;
+  }
+  for (let y=0;y<size;y++){
+    for (let x=0;x<size;x++){
+      const t = grid[y][x];
+      ctx2.fillStyle = colorForTile(t);
+      ctx2.fillRect(Math.floor(x*pxW), Math.floor(y*pxH), Math.ceil(pxW), Math.ceil(pxH));
+    }
+  }
+}
+
+/* refresh save list UI */
+function refreshSaveList(){
+  const saves = getAllSaves();
+  const saveList = document.getElementById("saveList");
+  saveList.innerHTML = "";
+  const keys = Object.keys(saves).sort((a,b) => (saves[b].timestamp||0)-(saves[a].timestamp||0));
+  if (keys.length === 0) saveList.innerHTML = "<div style='color:#bbb;padding:6px'>No hay guardados.</div>";
+  keys.forEach(name => {
+    const row = document.createElement("div"); row.className = "save-row";
+    const meta = saves[name];
+    const date = meta && meta.timestamp ? new Date(meta.timestamp).toLocaleString() : "(vacío)";
+    const left = document.createElement("div"); left.className = "save-left";
+    const card = document.createElement("div"); card.className = "save-card";
+    const cvs = document.createElement("canvas"); cvs.style.width="100%"; cvs.style.height="100%";
+    card.appendChild(cvs);
+    left.appendChild(card);
+    const metaDiv = document.createElement("div"); metaDiv.className="save-meta";
+    metaDiv.innerHTML = `<b>${name}</b><span class="date">${date}</span>`;
+    left.appendChild(metaDiv);
+    row.appendChild(left);
+    const btns = document.createElement("div"); btns.style.display = "flex";
+    const load = document.createElement("button"); load.textContent = "Cargar"; load.onclick = ()=> loadWorld(name);
+    const download = document.createElement("button"); download.textContent = "Exportar"; download.onclick = ()=> downloadSave(name);
+    const del = document.createElement("button"); del.textContent = "Eliminar"; del.onclick = ()=> { deleteSave(name); };
+    btns.appendChild(load); btns.appendChild(download); btns.appendChild(del);
+    row.appendChild(btns);
+    saveList.appendChild(row);
+    setTimeout(()=> { try { renderMinimapToCanvas(saves[name].minimap, cvs); } catch(e){ console.warn(e); } }, 0);
+  });
+  updateQuickMetaUI();
+  if (worldSelector.style.display === "flex") populateWorldSelector();
+}
 
 /* ---------- World selector (visual) ---------- */
-function openWorldSelector(){ worldSelector.style.display = "flex"; setTimeout(()=>{ worldSelector.classList.add('open'); },10); populateWorldSelector(); worldMenuOpen = true; minimizeUI(true); }
-function closeWorldSelector(){ worldSelector.classList.remove('open'); setTimeout(()=>{ worldSelector.style.display = "none"; worldMenuOpen = false; minimizeUI(false); },320); }
-function populateWorldSelector(){ worldGrid.innerHTML = ""; const saves = getAllSaves(); const keys = Object.keys(saves).sort((a,b) => (saves[b].timestamp||0)-(saves[a].timestamp||0)); if (keys.length === 0){ noWorlds.style.display = "block"; return; } else noWorlds.style.display = "none"; keys.forEach(name => { const s = saves[name]; const card = document.createElement("div"); card.className = "world-card"; const miniWrap = document.createElement("div"); miniWrap.className = "world-mini"; const cvs = document.createElement("canvas"); cvs.width = 92; cvs.height = 72; cvs.style.width="92px"; cvs.style.height="72px"; miniWrap.appendChild(cvs); card.appendChild(miniWrap); const info = document.createElement("div"); info.className = "world-info"; const date = s.timestamp ? new Date(s.timestamp).toLocaleString() : "(vacío)"; info.innerHTML = `<b>${name}</b><div class="date">${date}</div>`; const actions = document.createElement("div"); actions.className = "world-actions"; const load = document.createElement("button"); load.textContent = "Cargar"; load.onclick = ()=> { loadWorld(name); }; const del = document.createElement("button"); del.textContent = "Eliminar"; del.onclick = ()=> { deleteSave(name); populateWorldSelector(); }; const exp = document.createElement("button"); exp.textContent = "Exportar"; exp.onclick = ()=> downloadSave(name); actions.appendChild(load); actions.appendChild(exp); actions.appendChild(del); info.appendChild(actions); card.appendChild(info); worldGrid.appendChild(card); setTimeout(()=> { try { renderMinimapToCanvas(s.minimap, cvs); } catch(e){ console.warn(e); } },0); }); }
+function openWorldSelector(){ 
+  worldSelector.style.display = "flex"; 
+  setTimeout(()=>{ worldSelector.classList.add('open'); },10); 
+  populateWorldSelector(); 
+  worldMenuOpen = true; 
+  // minimizar pociones
+  minimizeUI(true);
+}
+function closeWorldSelector(){ 
+  worldSelector.classList.remove('open'); 
+  setTimeout(()=>{ 
+    worldSelector.style.display = "none"; 
+    worldMenuOpen = false; 
+    minimizeUI(false); 
+  },320); 
+}
+function populateWorldSelector(){
+  worldGrid.innerHTML = "";
+  const saves = getAllSaves();
+  const keys = Object.keys(saves).sort((a,b) => (saves[b].timestamp||0)-(saves[a].timestamp||0));
+  if (keys.length === 0){ noWorlds.style.display = "block"; return; } else noWorlds.style.display = "none";
+  keys.forEach(name => {
+    const s = saves[name];
+    const card = document.createElement("div"); card.className = "world-card";
+    const miniWrap = document.createElement("div"); miniWrap.className = "world-mini";
+    const cvs = document.createElement("canvas"); cvs.width = 92; cvs.height = 72; cvs.style.width="92px"; cvs.style.height="72px";
+    miniWrap.appendChild(cvs);
+    card.appendChild(miniWrap);
+    const info = document.createElement("div"); info.className = "world-info";
+    const date = s.timestamp ? new Date(s.timestamp).toLocaleString() : "(vacío)";
+    info.innerHTML = `<b>${name}</b><div class="date">${date}</div>`;
+    const actions = document.createElement("div"); actions.className = "world-actions";
+    const load = document.createElement("button"); load.textContent = "Cargar"; load.onclick = ()=> { loadWorld(name); };
+    const del = document.createElement("button"); del.textContent = "Eliminar"; del.onclick = ()=> { deleteSave(name); populateWorldSelector(); };
+    const exp = document.createElement("button"); exp.textContent = "Exportar"; exp.onclick = ()=> downloadSave(name);
+    actions.appendChild(load); actions.appendChild(exp); actions.appendChild(del);
+    info.appendChild(actions);
+    card.appendChild(info);
+    worldGrid.appendChild(card);
+    setTimeout(()=> { try { renderMinimapToCanvas(s.minimap, cvs); } catch(e){ console.warn(e); } },0);
+  });
+}
 
 /* ---------- Quick slots (3) ---------- */
 function quickKey(n){ return `_quick_slot_${n}`; }
@@ -845,7 +1108,11 @@ function quickLoad(n){ const key = quickKey(n); const saves = getAllSaves(); if 
 function updateQuickMetaUI(){ const saves = getAllSaves(); const q1meta = document.getElementById("q1meta"), q2meta=document.getElementById("q2meta"), q3meta=document.getElementById("q3meta"); [1,2,3].forEach(n => { const s = saves[quickKey(n)]; const span = (n===1)?q1meta:(n===2)?q2meta:q3meta; if (s && s.timestamp) span.textContent = new Date(s.timestamp).toLocaleString(); else span.textContent = "(vacío)"; }); }
 
 /* ---------- UI wiring ---------- */
-openSavesBtn.onclick = ()=> { if (openSavesBtn.classList.contains('minimized') || openSavesBtn.classList.contains('pociones-hidden') || pocionesHidden) return; savePanel.style.display = (savePanel.style.display === "block") ? "none" : "block"; refreshSaveList(); };
+openSavesBtn.onclick = ()=> { 
+  if (openSavesBtn.classList.contains('minimized') || openSavesBtn.classList.contains('pociones-hidden') || pocionesHidden) return;
+  savePanel.style.display = (savePanel.style.display === "block") ? "none" : "block"; 
+  refreshSaveList(); 
+};
 const saveBtn = document.getElementById("saveBtn"), saveNameInput=document.getElementById("saveNameInput"), autosaveToggle=document.getElementById("autosaveToggle"), exportAllBtn=document.getElementById("exportAllBtn"), importBtn=document.getElementById("importBtn"), importFile=document.getElementById("importFile"), clearAllBtn=document.getElementById("clearAllBtn");
 saveBtn.onclick = ()=> { const name = saveNameInput.value.trim(); if (!name) { alert("Escribe un nombre para el guardado."); return; } saveWorld(name); };
 autosaveToggle.onclick = ()=> setAutosave(!autosaveEnabled);
@@ -854,26 +1121,51 @@ importBtn.onclick = ()=> importFile.click();
 importFile.onchange = ()=> { const f = importFile.files[0]; if (f) importSavesFile(f); importFile.value = ""; };
 clearAllBtn.onclick = ()=> clearAllSaves();
 
-togglePocionesBtn.onclick = ()=>{ setPocionesHidden(!pocionesHidden); if (!pocionesHidden){ togglePocionesBtn.classList.add('active'); } else { togglePocionesBtn.classList.remove('active'); } };
-
-/* ---------- small UI helpers ---------- */
-function showMessage(msg, ms=1400){ toast.textContent = msg; toast.style.display = 'block'; toast.style.opacity = '1'; clearTimeout(toast._t); toast._t = setTimeout(()=>{ toast.style.opacity='0'; setTimeout(()=> toast.style.display='none', 250); }, ms); }
-function flashSaveBtn(){ openSavesBtn.style.transition = "none"; openSavesBtn.style.transform = "scale(1.06)"; setTimeout(()=> { openSavesBtn.style.transition = "transform 200ms"; openSavesBtn.style.transform = ""; }, 200); }
-function playSaveSound(){ try { const AudioCtx = window.AudioContext || window.webkitAudioContext; const ctxA = new AudioCtx(); const o = ctxA.createOscillator(); const g = ctxA.createGain(); o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.02; o.connect(g); g.connect(ctxA.destination); o.start(); setTimeout(()=> { o.stop(); try{ ctxA.close(); } catch(e){}; }, 120); } catch (e){ console.warn("Audio error", e); } }
-
-/* missing utility functions used earlier */
-function setPocionesHidden(flag){ pocionesHidden = !!flag; if (pocionesHidden){ openSavesBtn.classList.add('pociones-hidden'); quickBar.style.display='none'; } else { openSavesBtn.classList.remove('pociones-hidden'); quickBar.style.display='flex'; } }
-function minimizeUI(flag){ if (flag){ quickBar.style.transform = 'translateY(40px)'; openSavesBtn.classList.add('minimized'); } else { quickBar.style.transform = ''; openSavesBtn.classList.remove('minimized'); } }
+togglePocionesBtn.onclick = ()=>{
+  setPocionesHidden(!pocionesHidden);
+  if (!pocionesHidden){
+    togglePocionesBtn.classList.add('active');
+  } else {
+    togglePocionesBtn.classList.remove('active');
+  }
+};
 
 /* ---------- Initialization ---------- */
-(function ensureQuickPlaceholders(){ const saves = getAllSaves(); let changed=false; [1,2,3].forEach(n=>{ const k = quickKey(n); if (!saves[k]) { saves[k] = { version: GAME_VERSION, timestamp: 0, gameMode: "survival", seed: null, minimap:null, world:null, player:null, enemies:null }; changed=true; } }); if (changed) persistAllSaves(saves); refreshSaveList(); })();
+(function ensureQuickPlaceholders(){
+  const saves = getAllSaves();
+  let changed=false;
+  [1,2,3].forEach(n=>{
+    const k = quickKey(n);
+    if (!saves[k]) { saves[k] = { version: GAME_VERSION, timestamp: 0, gameMode: "survival", seed: null, minimap:null, world:null, player:null, enemies:null }; changed=true; }
+  });
+  if (changed) persistAllSaves(saves);
+  refreshSaveList();
+})();
 
+// default: pociones visible (toggle button active)
 togglePocionesBtn.classList.add('active');
 createNewWorld();
-drawInv(); drawEquipUI(); renderHotbar(); buildCraftUI();
+drawInv(); drawEquipUI(); renderHotbar();
+
+/* ---------- pequeñas utilidades visuales ---------- */
+function flashSaveBtn(){ openSavesBtn.style.transition = "none"; openSavesBtn.style.transform = "scale(1.06)"; setTimeout(()=> { openSavesBtn.style.transition = "transform 200ms"; openSavesBtn.style.transform = ""; }, 200); }
+function playSaveSound(){
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const ctxA = new AudioCtx();
+    const o = ctxA.createOscillator();
+    const g = ctxA.createGain();
+    o.type = 'sine';
+    o.frequency.value = 880;
+    g.gain.value = 0.02;
+    o.connect(g); g.connect(ctxA.destination);
+    o.start();
+    setTimeout(()=> { o.stop(); try{ ctxA.close(); } catch(e){}; }, 120);
+  } catch (e){ console.warn("Audio error", e); }
+}
 
 /* ---------- pequeña explicación de uso (en consola) ---------- */
-console.log("Controles: WASD mover (con cooldown). E = abrir/cerrar inventario (pausa). 1-9 = hotbar. Click inventario = usar/equipar/seleccionar. Drag items: arrastra desde inventario/hotbar a ranuras de equipamiento, o arrastra equipo de vuelta al inventario.");
+console.log("Controles: WASD mover (con cooldown). E = abrir/cerrar inventario (pausa). 1-9 = hotbar. Click inventario = usar/equipar/seleccionar. Click derecho sobre tierra = colocar bloque (si tienes).");
 
 /* Fin del script */
 </script>

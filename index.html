@@ -2,108 +2,98 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>RPG Top-Down Multiplayer</title>
+    <title>RPG - Slime Invasion</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         body { margin: 0; overflow: hidden; background: #2d5a27; font-family: 'Segoe UI', sans-serif; display: flex; }
         #game-container { position: relative; flex-grow: 1; height: 100vh; }
         canvas { display: block; background: #3e7c37; }
-        
-        /* Panel Lateral de Servidor */
-        #server-panel { width: 300px; background: #1e293b; color: white; padding: 20px; border-left: 4px solid #38bdf8; box-shadow: -5px 0 15px rgba(0,0,0,0.3); z-index: 100; }
-        .code-box { background: #0f172a; padding: 10px; border-radius: 5px; color: #38bdf8; font-family: monospace; word-break: break-all; margin: 10px 0; border: 1px solid #334155; }
-        
-        #ui-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-        .menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15,23,42,0.95); padding: 30px; border-radius: 15px; pointer-events: auto; text-align: center; color: white; border: 2px solid #38bdf8; }
-        button { background: #38bdf8; border: none; padding: 10px 20px; font-weight: bold; border-radius: 5px; cursor: pointer; margin: 5px; }
-        input { padding: 10px; border-radius: 5px; border: none; margin-bottom: 10px; width: 80%; }
-        #inventory { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; pointer-events: auto; }
-        .slot { width: 45px; height: 45px; background: rgba(0,0,0,0.6); border: 2px solid #64748b; display: flex; justify-content: center; align-items: center; color: white; font-size: 20px; }
-        .slot.active { border-color: #38bdf8; box-shadow: 0 0 10px #38bdf8; }
+        #server-panel { width: 280px; background: #1e293b; color: white; padding: 20px; border-left: 4px solid #38bdf8; z-index: 100; }
+        .code-box { background: #0f172a; padding: 10px; border-radius: 5px; color: #38bdf8; font-family: monospace; word-break: break-all; margin: 10px 0; }
+        .menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15,23,42,0.95); padding: 30px; border-radius: 15px; pointer-events: auto; text-align: center; color: white; border: 2px solid #38bdf8; z-index: 200; }
+        button { background: #38bdf8; border: none; padding: 10px; font-weight: bold; cursor: pointer; border-radius: 5px; width: 100%; margin-top: 10px; }
+        #hud { position: absolute; top: 20px; right: 20px; color: white; font-weight: bold; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; }
     </style>
 </head>
 <body>
 
 <div id="game-container">
     <canvas id="game"></canvas>
-    <div id="ui-overlay">
-        <div id="setup" class="menu">
-            <h2>RPG WORLD CREATOR</h2>
-            <input type="text" id="playerName" placeholder="Tu Nombre RPG">
-            <button onclick="startHost()">CREAR MUNDO NUEVO</button>
-            <hr style="opacity: 0.2; margin: 20px 0;">
-            <input type="text" id="joinId" placeholder="ID del Servidor">
-            <button onclick="startJoin()">UNIRSE A PARTIDA</button>
-        </div>
-        <div id="inventory">
-            <div class="slot active" id="s1">🛡️</div>
-            <div class="slot" id="s2">⚔️</div>
-            <div class="slot" id="s3">🏹</div>
-        </div>
+    <div id="hud">HP: <span id="hp-val">100</span></div>
+    <div id="setup" class="menu">
+        <h2>SLIME RPG</h2>
+        <input type="text" id="playerName" placeholder="Nombre del héroe" style="padding: 10px; width: 80%;"><br>
+        <button onclick="startHost()">CREAR MUNDO</button>
+        <button onclick="startJoin()" style="background: #94a3b8;">UNIRSE</button>
+        <input type="text" id="joinId" placeholder="ID del Host" style="padding: 10px; width: 80%; margin-top: 10px;">
     </div>
 </div>
 
 <div id="server-panel">
-    <h3>📡 INFO DEL SERVIDOR</h3>
-    <p style="font-size: 13px; color: #94a3b8;">Comparte este código con tus amigos para que entren a tu mundo:</p>
-    <div id="id-display" class="code-box">Sin ID generado...</div>
-    <button onclick="copyID()" style="width: 100%; font-size: 12px;">Copiar ID</button>
-    <hr style="border: 0; border-top: 1px solid #334155; margin: 20px 0;">
-    <h4>Jugadores:</h4>
-    <div id="player-list" style="font-size: 14px; color: #38bdf8;">- Nadie conectado -</div>
+    <h3>📡 SERVIDOR</h3>
+    <div id="id-display" class="code-box">Generando...</div>
+    <h4>JUGADORES</h4>
+    <div id="player-list"></div>
 </div>
 
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-canvas.width = window.innerWidth - 300;
+canvas.width = window.innerWidth - 280;
 canvas.height = window.innerHeight;
 
 const TILE_SIZE = 64;
-const WORLD_SIZE = 50; // 50x50 tiles
+const WORLD_SIZE = 40;
 let world = [];
 let players = {};
+let slimes = [];
 let connections = {};
 let myId = null;
 let isHost = false;
 let camera = { x: 0, y: 0 };
 
 let me = {
-    x: 1000, y: 1000, targetX: 1000, targetY: 1000,
-    name: "User", color: `hsl(${Math.random() * 360}, 70%, 60%)`,
-    dir: 'down', anim: 0
+    x: 500, y: 500, targetX: 500, targetY: 500,
+    name: "Héroe", color: "#38bdf8", hp: 100
 };
 
-// --- GENERACIÓN RPG TOP-DOWN ---
-function generateRPGWorld() {
+// --- GENERACIÓN ---
+function initWorld() {
     for(let x=0; x<WORLD_SIZE; x++) {
         world[x] = [];
         for(let y=0; y<WORLD_SIZE; y++) {
-            let val = 0; // Hierba base
-            if(Math.random() < 0.08) val = 1; // Árbol
-            if(Math.random() < 0.04) val = 2; // Roca
-            if(Math.random() < 0.02) val = 3; // Arbusto con bayas
-            world[x][y] = val;
+            let type = 0;
+            if(Math.random() < 0.07) type = 1; // Árbol
+            if(Math.random() < 0.03) type = 2; // Roca
+            world[x][y] = type;
         }
+    }
+    // Solo el Host genera slimes
+    if(isHost) {
+        for(let i=0; i<8; i++) spawnSlime();
     }
 }
 
-// --- NETWORKING ---
+function spawnSlime() {
+    slimes.push({
+        id: Math.random(),
+        x: Math.random() * (WORLD_SIZE * TILE_SIZE),
+        y: Math.random() * (WORLD_SIZE * TILE_SIZE),
+        size: 20 + Math.random() * 10,
+        speed: 1.5 + Math.random()
+    });
+}
+
+// --- RED ---
 function startHost() {
-    isHost = true;
-    generateRPGWorld();
+    isHost = true; initWorld();
     me.name = document.getElementById('playerName').value || "Host";
     const peer = new Peer();
-    peer.on('open', id => {
-        myId = id; players[id] = me;
-        document.getElementById('id-display').innerText = id;
-        init();
-    });
+    peer.on('open', id => { myId = id; players[id] = me; document.getElementById('id-display').innerText = id; init(); });
     peer.on('connection', conn => {
         conn.on('open', () => {
             connections[conn.peer] = conn;
-            conn.send({ type: 'init', world, players });
-            updatePlayerList();
+            conn.send({ type: 'init', world, players, slimes });
         });
         conn.on('data', data => handleData(data, conn.peer));
     });
@@ -111,44 +101,35 @@ function startHost() {
 
 function startJoin() {
     const hostId = document.getElementById('joinId').value;
-    if(!hostId) return alert("Introduce un ID");
-    me.name = document.getElementById('playerName').value || "Viajero";
+    me.name = document.getElementById('playerName').value || "Player";
     const peer = new Peer();
     peer.on('open', id => {
         myId = id; players[id] = me;
         const conn = peer.connect(hostId);
-        conn.on('open', () => {
-            connections[hostId] = conn;
-            conn.send({ type: 'join', p: me });
-            init();
-        });
+        conn.on('open', () => { connections[hostId] = conn; conn.send({ type: 'join', p: me }); init(); });
         conn.on('data', data => handleData(data, hostId));
     });
 }
 
 function handleData(data, senderId) {
-    if (data.type === 'init') { world = data.world; players = data.players; }
-    if (data.type === 'join') { 
-        players[senderId] = data.p; 
-        if(isHost) {
-            broadcast({type:'new', id:senderId, p:data.p});
-            updatePlayerList();
-        }
-    }
+    if (data.type === 'init') { world = data.world; players = data.players; slimes = data.slimes; }
+    if (data.type === 'join') { players[senderId] = data.p; if(isHost) broadcast({type:'new', id:senderId, p:data.p}); }
     if (data.type === 'new') players[data.id] = data.p;
     if (data.type === 'sync') {
-        if(!players[senderId]) return;
-        players[senderId].targetX = data.x;
-        players[senderId].targetY = data.y;
-        if(isHost) broadcast(data, senderId);
+        if(players[senderId]) { players[senderId].targetX = data.x; players[senderId].targetY = data.y; }
+        if(isHost) { 
+            slimes = data.slimes || slimes;
+            broadcast({type:'sync', x:data.x, y:data.y, id:senderId, slimes: slimes}, senderId);
+        }
     }
+    if (data.type === 'slimes_update') slimes = data.slimes;
 }
 
 function broadcast(data, skipId = null) {
     for(let id in connections) if(id !== skipId) connections[id].send(data);
 }
 
-// --- LÓGICA DE JUEGO ---
+// --- JUEGO ---
 let keys = {};
 function init() {
     document.getElementById('setup').style.display = 'none';
@@ -157,13 +138,54 @@ function init() {
     requestAnimationFrame(loop);
 }
 
+function updateSlimes() {
+    if(!isHost) return;
+
+    slimes.forEach(s => {
+        // Encontrar jugador más cercano
+        let target = null;
+        let minDist = 500;
+        for(let id in players) {
+            let dist = Math.hypot(players[id].x - s.x, players[id].y - s.y);
+            if(dist < minDist) { minDist = dist; target = players[id]; }
+        }
+
+        if(target) {
+            let angle = Math.atan2(target.y - s.y, target.x - s.x);
+            
+            // --- EVITAR OBSTÁCULOS ---
+            let nextX = s.x + Math.cos(angle) * s.speed;
+            let nextY = s.y + Math.sin(angle) * s.speed;
+            
+            let gridX = Math.floor(nextX / TILE_SIZE);
+            let gridY = Math.floor(nextY / TILE_SIZE);
+
+            if(world[gridX] && world[gridX][gridY] !== 0) {
+                // Si hay algo, intenta desviarse 90 grados
+                angle += Math.PI / 2;
+            }
+
+            s.x += Math.cos(angle) * s.speed;
+            s.y += Math.sin(angle) * s.speed;
+
+            // Daño al jugador
+            if(minDist < 20) {
+                // Lógica de daño simplificada
+                broadcast({type: 'damage', targetName: target.name});
+            }
+        }
+    });
+    broadcast({type: 'slimes_update', slimes: slimes});
+}
+
 function loop() {
-    const speed = 5;
-    let moving = false;
-    if(keys['a']) { me.x -= speed; moving = true; }
-    if(keys['d']) { me.x += speed; moving = true; }
-    if(keys['w']) { me.y -= speed; moving = true; }
-    if(keys['s']) { me.y += speed; moving = true; }
+    const speed = 4;
+    if(keys['a']) me.x -= speed;
+    if(keys['d']) me.x += speed;
+    if(keys['w']) me.y -= speed;
+    if(keys['s']) me.y += speed;
+
+    if(isHost) updateSlimes();
 
     camera.x = me.x - canvas.width/2;
     camera.y = me.y - canvas.height/2;
@@ -172,80 +194,45 @@ function loop() {
     ctx.save();
     ctx.translate(-camera.x, -camera.y);
 
-    // Dibujar Suelo y Objetos
+    // Dibujar Mundo
     for(let x=0; x<WORLD_SIZE; x++) {
         for(let y=0; y<WORLD_SIZE; y++) {
-            let tx = x * TILE_SIZE;
-            let ty = y * TILE_SIZE;
-            
-            // Solo dibujar si está en cámara (Culling)
-            if(tx > camera.x - TILE_SIZE && tx < camera.x + canvas.width &&
-               ty > camera.y - TILE_SIZE && ty < camera.y + canvas.height) {
-                
-                // Suelo
-                ctx.fillStyle = "#3e7c37";
-                ctx.fillRect(tx, ty, TILE_SIZE, TILE_SIZE);
-                ctx.strokeStyle = "rgba(0,0,0,0.05)";
-                ctx.strokeRect(tx, ty, TILE_SIZE, TILE_SIZE);
-
-                // Objetos
-                if(world[x][y] === 1) drawTree(tx + 32, ty + 32);
-                if(world[x][y] === 2) drawRock(tx + 32, ty + 32);
-                if(world[x][y] === 3) drawBush(tx + 32, ty + 32);
+            if(world[x][y] === 1) { // Árbol
+                ctx.fillStyle = "#451a03"; ctx.fillRect(x*64+24, y*64+40, 16, 20);
+                ctx.fillStyle = "#14532d"; ctx.beginPath(); ctx.arc(x*64+32, y*64+25, 25, 0, Math.PI*2); ctx.fill();
+            }
+            if(world[x][y] === 2) { // Roca
+                ctx.fillStyle = "#64748b"; ctx.beginPath(); ctx.arc(x*64+32, y*64+45, 15, 0, Math.PI*2); ctx.fill();
             }
         }
     }
 
+    // Dibujar Slimes
+    slimes.forEach(s => {
+        ctx.fillStyle = "rgba(34, 197, 94, 0.8)";
+        let bounce = Math.sin(Date.now() / 200) * 5;
+        ctx.beginPath();
+        ctx.ellipse(s.x, s.y + bounce, s.size, s.size - 5 + bounce, 0, 0, Math.PI*2);
+        ctx.fill();
+        // Ojos
+        ctx.fillStyle = "black";
+        ctx.fillRect(s.x-8, s.y+bounce-5, 4, 4); ctx.fillRect(s.x+4, s.y+bounce-5, 4, 4);
+    });
+
     // Dibujar Jugadores
     for(let id in players) {
         let p = players[id];
-        if(id !== myId) {
-            p.x += (p.targetX - p.x) * 0.15;
-            p.y += (p.targetY - p.y) * 0.15;
-        } else if(moving) {
-            broadcast({type:'sync', x:me.x, y:me.y});
-        }
-
-        // Sombra
-        ctx.fillStyle = "rgba(0,0,0,0.2)";
-        ctx.beginPath(); ctx.ellipse(p.x+15, p.y+40, 15, 8, 0, 0, Math.PI*2); ctx.fill();
-
-        // Personaje
-        ctx.fillStyle = p.color;
-        ctx.fillRect(p.x, p.y, 30, 45);
+        if(id !== myId) { p.x += (p.targetX - p.x) * 0.1; p.y += (p.targetY - p.y) * 0.1; }
+        else { broadcast({type:'sync', x:me.x, y:me.y}); }
         
-        ctx.fillStyle = "white";
-        ctx.font = "bold 14px Arial";
-        ctx.textAlign = "center";
-        ctx.fillText(p.name, p.x + 15, p.y - 10);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x-15, p.y-20, 30, 40);
+        ctx.fillStyle = "white"; ctx.textAlign = "center";
+        ctx.fillText(p.name, p.x, p.y - 30);
     }
 
     ctx.restore();
     requestAnimationFrame(loop);
-}
-
-// --- DIBUJO DE ASSETS ---
-function drawTree(x, y) {
-    ctx.fillStyle = "#451a03"; ctx.fillRect(x-8, y, 16, 20); // Tronco
-    ctx.fillStyle = "#14532d"; ctx.beginPath(); ctx.arc(x, y-10, 25, 0, Math.PI*2); ctx.fill(); // Hojas
-}
-function drawRock(x, y) {
-    ctx.fillStyle = "#64748b"; ctx.beginPath(); ctx.arc(x, y+10, 15, 0, Math.PI*2); ctx.fill();
-}
-function drawBush(x, y) {
-    ctx.fillStyle = "#166534"; ctx.beginPath(); ctx.arc(x, y+10, 12, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = "red"; ctx.fillRect(x-2, y+5, 4, 4); // Baya
-}
-
-function copyID() {
-    const id = document.getElementById('id-display').innerText;
-    navigator.clipboard.writeText(id);
-    alert("ID Copiado: " + id);
-}
-
-function updatePlayerList() {
-    const list = document.getElementById('player-list');
-    list.innerHTML = Object.values(players).map(p => `• ${p.name}`).join('<br>');
 }
 </script>
 </body>

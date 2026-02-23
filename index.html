@@ -2,30 +2,57 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Minecraft RPG 2D Multiplayer</title>
+<title>Minecraft RPG 2D Online</title>
 <style>
-body{margin:0;font-family:sans-serif;background:#222;color:white;overflow:hidden}
-#menu{position:absolute;left:10px;top:10px;background:#000a;padding:10px;border-radius:10px}
-input,button{margin:3px}
-#game{display:none}
-#ui{position:absolute;left:10px;top:10px;background:#0007;padding:8px;border-radius:10px}
-#players{font-size:12px;margin-top:5px}
+body{margin:0;font-family:sans-serif;background:#1b1b1b;color:white;overflow:hidden}
+canvas{display:block}
+.panel{background:#000c;padding:15px;border-radius:12px}
+#menu{
+position:absolute;left:50%;top:50%;
+transform:translate(-50%,-50%);
+width:260px;text-align:center
+}
+input,button,select{
+width:100%;margin:5px 0;padding:6px;border-radius:6px;border:none
+}
+button{background:#3a8;color:white;font-weight:bold;cursor:pointer}
+#ui{
+position:absolute;left:10px;top:10px;
+background:#0008;padding:8px;border-radius:10px;font-size:14px
+}
 #chat{height:90px;overflow:auto;background:#111;margin-top:5px;padding:4px}
 </style>
 </head>
 <body>
 
-<div id="menu">
-<button onclick="host()">HOST</button><br>
-Código:<br>
-<input id="code" style="width:180px"><br>
-<button onclick="join()">JOIN</button>
+<!-- MENU -->
+<div id="menu" class="panel">
+<h3>Minecraft RPG 2D</h3>
+
+Nombre:
+<input id="name" placeholder="Tu nombre">
+
+Skin:
+<select id="skin">
+<option>😀</option>
+<option>😎</option>
+<option>🤠</option>
+<option>👽</option>
+<option>🤖</option>
+<option>🐸</option>
+<option>🐱</option>
+</select>
+
+Código sala:
+<input id="roomInput" placeholder="Si está vacío crea sala">
+
+<button onclick="enter()">ENTRAR</button>
 </div>
 
 <canvas id="c"></canvas>
 
-<div id="ui">
-<div>Sala: <span id="room"></span></div>
+<div id="ui" style="display:none">
+<div>Sala: <span id="roomLabel"></span></div>
 <div id="players"></div>
 <div id="chat"></div>
 <input id="msg" placeholder="chat">
@@ -39,36 +66,59 @@ canvas.height=innerHeight;
 
 let ws;
 let peers={};
-let myId=Math.random().toString(36).substr(2,9);
-let room="";
 let players={};
 let keys={};
 
-const TREES=[];
-for(let i=0;i<40;i++){
-TREES.push({x:Math.random()*3000,y:Math.random()*3000});
-}
+let myId=Math.random().toString(36).substr(2,9);
+let room="";
+let started=false;
 
-const me={
+let me={
 x:1500,y:1500,
-emoji:["😀","😎","🤠","👽","🤖"][Math.floor(Math.random()*5)],
-name:"Player"+Math.floor(Math.random()*999)
+emoji:"😀",
+name:"Player"
 };
 
 players[myId]=me;
 
-function connectWS(){
+const TREES=[];
+for(let i=0;i<50;i++){
+TREES.push({x:Math.random()*3000,y:Math.random()*3000});
+}
+
+function enter(){
+me.name=document.getElementById("name").value||"Player";
+me.emoji=document.getElementById("skin").value;
+
+room=document.getElementById("roomInput").value;
+if(!room) room=Math.random().toString(36).substr(2,6);
+
+document.getElementById("menu").style.display="none";
+document.getElementById("ui").style.display="block";
+document.getElementById("roomLabel").innerText=room;
+
+connect();
+started=true;
+}
+
+function connect(){
 ws=new WebSocket("wss://y-webrtc-signaling-eu.herokuapp.com");
 
-ws.onopen=()=>ws.send(JSON.stringify({
-type:"join",
-room
-}));
+ws.onopen=()=>{
+ws.send(JSON.stringify({type:"join",room,from:myId}));
+setTimeout(()=>ws.send(JSON.stringify({type:"peers",room,from:myId})),500);
+};
 
 ws.onmessage=async e=>{
 let msg=JSON.parse(e.data);
-
 if(msg.from===myId)return;
+
+if(msg.type==="peers"){
+let pc=createPeer(msg.from);
+let offer=await pc.createOffer();
+await pc.setLocalDescription(offer);
+ws.send(JSON.stringify({type:"offer",offer,to:msg.from,room,from:myId}));
+}
 
 if(msg.type==="offer"){
 let pc=createPeer(msg.from);
@@ -117,56 +167,10 @@ function setupDC(id,dc){
 dc.onmessage=e=>{
 let data=JSON.parse(e.data);
 
-if(data.type==="state"){
-players[id]=data.player;
-}
-
-if(data.type==="chat"){
-chat(data.name+": "+data.msg);
-}
+if(data.type==="state") players[id]=data.player;
+if(data.type==="chat") addChat(data.name+": "+data.msg);
 };
 peers[id].dc=dc;
-}
-
-async function host(){
-room=Math.random().toString(36).substr(2,6);
-document.getElementById("code").value=room;
-start();
-}
-
-async function join(){
-room=document.getElementById("code").value;
-if(!room)return;
-start();
-}
-
-async function start(){
-document.getElementById("menu").style.display="none";
-document.getElementById("game").style.display="block";
-document.getElementById("room").innerText=room;
-connectWS();
-
-ws.onopen=async ()=>{
-ws.send(JSON.stringify({type:"join",room,from:myId}));
-
-setTimeout(async ()=>{
-ws.send(JSON.stringify({type:"peers",room,from:myId}));
-},500);
-};
-
-ws.onmessage=async e=>{
-let msg=JSON.parse(e.data);
-if(msg.from===myId)return;
-
-if(msg.type==="peers"){
-let pc=createPeer(msg.from);
-let offer=await pc.createOffer();
-await pc.setLocalDescription(offer);
-ws.send(JSON.stringify({
-type:"offer",offer,to:msg.from,room,from:myId
-}));
-}
-};
 }
 
 function sendState(){
@@ -185,7 +189,7 @@ if(dc && dc.readyState==="open"){
 dc.send(JSON.stringify({type:"chat",msg:m,name:me.name}));
 }
 }
-chat(me.name+": "+m);
+addChat(me.name+": "+m);
 }
 
 document.getElementById("msg").onkeydown=e=>{
@@ -195,7 +199,7 @@ e.target.value="";
 }
 };
 
-function chat(t){
+function addChat(t){
 let c=document.getElementById("chat");
 c.innerHTML+=t+"<br>";
 c.scrollTop=9999;
@@ -205,6 +209,8 @@ addEventListener("keydown",e=>keys[e.key]=true);
 addEventListener("keyup",e=>keys[e.key]=false);
 
 function update(){
+if(!started)return;
+
 let sp=4;
 if(keys["w"])me.y-=sp;
 if(keys["s"])me.y+=sp;
@@ -217,6 +223,8 @@ sendState();
 function draw(){
 ctx.fillStyle="#3a7";
 ctx.fillRect(0,0,canvas.width,canvas.height);
+
+if(!started)return;
 
 let camX=me.x-canvas.width/2;
 let camY=me.y-canvas.height/2;

@@ -2,59 +2,108 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>RPG - Combat & Fix</title>
+    <title>Mega RPG P2P - Ultimate Edition</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #2d5a27; font-family: sans-serif; display: flex; }
-        #game-container { position: relative; flex-grow: 1; height: 100vh; }
+        body { margin: 0; overflow: hidden; background: #1a2e1a; font-family: 'Segoe UI', sans-serif; display: flex; }
+        #game-container { position: relative; flex-grow: 1; height: 100vh; overflow: hidden; }
         canvas { display: block; background: #3e7c37; }
-        #server-panel { width: 250px; background: #1e293b; color: white; padding: 20px; border-left: 4px solid #38bdf8; }
-        .code-box { background: #0f172a; padding: 10px; border-radius: 5px; color: #38bdf8; font-family: monospace; font-size: 11px; }
-        #hotbar { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; pointer-events: auto; }
-        .slot { width: 50px; height: 50px; background: rgba(0,0,0,0.6); border: 2px solid #64748b; border-radius: 5px; display: flex; justify-content: center; align-items: center; color: white; cursor: pointer; font-size: 24px; }
-        .slot.active { border-color: #38bdf8; box-shadow: 0 0 10px #38bdf8; }
-        .menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1e293b; padding: 30px; border-radius: 15px; text-align: center; color: white; border: 2px solid #38bdf8; z-index: 1000; }
-        #damage-flash { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: red; opacity: 0; pointer-events: none; }
+        
+        /* UI Laterales y Superiores */
+        #server-panel { width: 280px; background: #0f172a; color: white; padding: 20px; border-left: 4px solid #38bdf8; z-index: 100; box-shadow: -5px 0 15px rgba(0,0,0,0.5); }
+        .code-box { background: #1e293b; padding: 10px; border-radius: 5px; color: #38bdf8; font-family: monospace; font-size: 11px; margin: 10px 0; border: 1px solid #334155; }
+        
+        #hud { position: absolute; top: 20px; left: 20px; color: white; pointer-events: none; z-index: 50; }
+        #hp-bar-container { width: 200px; height: 20px; background: #334155; border: 2px solid white; border-radius: 10px; overflow: hidden; }
+        #hp-fill { width: 100%; height: 100%; background: #ef4444; transition: 0.3s; }
+
+        #hotbar { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 12px; pointer-events: auto; }
+        .slot { width: 50px; height: 50px; border: 2px solid #475569; border-radius: 8px; display: flex; justify-content: center; align-items: center; color: white; font-size: 24px; cursor: pointer; position: relative; transition: 0.2s; }
+        .slot.active { border-color: #38bdf8; background: rgba(56, 189, 248, 0.2); transform: scale(1.1); }
+        .slot-key { position: absolute; top: 2px; left: 5px; font-size: 10px; color: #94a3b8; }
+
+        /* Menú Inicial */
+        .menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1e293b; padding: 40px; border-radius: 20px; text-align: center; color: white; border: 3px solid #38bdf8; z-index: 1000; box-shadow: 0 0 50px rgba(0,0,0,1); }
+        input { padding: 12px; border-radius: 8px; border: none; margin: 10px; width: 250px; font-size: 16px; }
+        button { background: #38bdf8; border: none; padding: 12px 25px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.3s; }
+        button:hover { background: #7dd3fc; transform: translateY(-2px); }
+
+        #damage-overlay { position: absolute; top:0; left:0; width:100%; height:100%; background: red; opacity: 0; pointer-events: none; transition: opacity 0.1s; }
     </style>
 </head>
 <body>
 
 <div id="game-container">
     <canvas id="game"></canvas>
-    <div id="damage-flash"></div>
-    <div id="setup" class="menu">
-        <h2>BATALLA RPG</h2>
-        <input type="text" id="playerName" placeholder="Nombre" style="padding:10px; margin:5px;"><br>
-        <button onclick="startHost()" style="padding:10px; cursor:pointer;">HOSTEAR</button>
-        <button onclick="startJoin()" style="padding:10px; cursor:pointer;">UNIRSE</button>
-        <input type="text" id="joinId" placeholder="ID del Host" style="padding:10px; margin:5px;">
+    <div id="damage-overlay"></div>
+    
+    <div id="hud">
+        <div id="player-tag" style="font-weight: bold; font-size: 18px; margin-bottom: 5px;">Héroe</div>
+        <div id="hp-bar-container"><div id="hp-fill"></div></div>
     </div>
-    <div id="hotbar">
-        <div class="slot active" id="s1" onclick="setSlot(1)">👊</div>
-        <div class="slot" id="s2" onclick="setSlot(2)">⚔️</div>
-        <div class="slot" id="s3" onclick="setSlot(3)">🧱</div>
+
+    <div id="setup" class="menu">
+        <h1>⚔️ SLIME RPG ONLINE 🛡️</h1>
+        <input type="text" id="playerName" placeholder="Tu nombre de guerrero...">
+        <br>
+        <button onclick="startHost()">CREAR NUEVO MUNDO</button>
+        <div style="margin: 20px; opacity: 0.5;">— O —</div>
+        <input type="text" id="joinId" placeholder="Pegar ID del Host aquí">
+        <br>
+        <button onclick="startJoin()" style="background: #64748b;">UNIRSE A MUNDO</button>
+        <p id="status" style="margin-top: 15px; color: #38bdf8;">Esperando acción...</p>
+    </div>
+
+    <div id="hotbar" style="display:none;">
+        <div class="slot active" id="s1" onclick="setSlot(1)"><span class="slot-key">1</span>👊</div>
+        <div class="slot" id="s2" onclick="setSlot(2)"><span class="slot-key">2</span>⚔️</div>
+        <div class="slot" id="s3" onclick="setSlot(3)"><span class="slot-key">3</span>🧱</div>
     </div>
 </div>
 
 <div id="server-panel">
-    <h3>📡 SERVER</h3>
-    <div id="id-display" class="code-box">...</div>
-    <h4>JUGADORES</h4>
+    <h3>📡 CONEXIÓN</h3>
+    <p style="font-size: 12px; color: #94a3b8;">ID del Servidor (Copia esto):</p>
+    <div id="id-display" class="code-box">No generado</div>
+    <hr style="border:0; border-top: 1px solid #334155; margin: 20px 0;">
+    <h4>👥 JUGADORES</h4>
     <div id="player-list"></div>
 </div>
 
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-canvas.width = window.innerWidth - 250;
+canvas.width = window.innerWidth - 280;
 canvas.height = window.innerHeight;
 
 const TILE_SIZE = 64;
+const WORLD_SIZE = 50;
 let world = [], players = {}, slimes = [], connections = {}, myId = null, isHost = false, selectedSlot = 1;
-let camera = { x: 0, y: 0 };
-let me = { x: 400, y: 400, targetX: 400, targetY: 400, name: "Yo", color: "#38bdf8", item: 1, hp: 100 };
+let camera = { x: 0, y: 0 }, keys = {};
+let me = { x: 1000, y: 1000, targetX: 1000, targetY: 1000, name: "Guerrero", color: `hsl(${Math.random()*360}, 70%, 50%)`, item: 1, hp: 100 };
 
-// --- LOGICA DE RED (LA CLAVE DEL ARREGLO) ---
+// --- GENERACIÓN DE MUNDO ---
+function generateWorld() {
+    for(let x=0; x<WORLD_SIZE; x++) {
+        world[x] = [];
+        for(let y=0; y<WORLD_SIZE; y++) {
+            let r = Math.random();
+            world[x][y] = (r < 0.06) ? 1 : (r < 0.09 ? 2 : 0); // 1: Arbol, 2: Roca
+        }
+    }
+    for(let i=0; i<12; i++) spawnSlime();
+}
+
+function spawnSlime() {
+    slimes.push({
+        id: Math.random(),
+        x: Math.random() * (WORLD_SIZE * TILE_SIZE),
+        y: Math.random() * (WORLD_SIZE * TILE_SIZE),
+        hp: 30, speed: 1.5 + Math.random()
+    });
+}
+
+// --- RED (RELAY CORREGIDO) ---
 function handleData(data, senderId) {
     if (data.type === 'init') { world = data.world; players = data.players; slimes = data.slimes; }
     if (data.type === 'join') { 
@@ -63,70 +112,85 @@ function handleData(data, senderId) {
         updateUI();
     }
     if (data.type === 'new') { players[data.id] = data.p; updateUI(); }
-    
-    // El Host reenvía la posición a TODOS para que el invitado se vea mover
     if (data.type === 'sync') {
         if(!players[senderId]) return;
-        players[senderId].targetX = data.x;
-        players[senderId].targetY = data.y;
-        players[senderId].item = data.item;
-        if(isHost) broadcast(data, senderId); // RELEVÓ: Envía a los demás
+        players[senderId].targetX = data.x; players[senderId].targetY = data.y;
+        players[senderId].item = data.item; players[senderId].hp = data.hp;
+        if(isHost) {
+            slimes = data.slimes || slimes;
+            broadcast(data, senderId); // RELEVO PARA QUE TODOS SE VEAN
+        }
     }
-    
-    if (data.type === 'hit') {
-        if(data.targetId === myId) takeDamage(10);
-    }
+    if (data.type === 'hit') { if(data.targetId === myId) takeDamage(15); }
+    if (data.type === 'build') { world[data.x][data.y] = data.v; if(isHost) broadcast(data, senderId); }
+    if (data.type === 'slime_death') { slimes = slimes.filter(s => s.id !== data.slimeId); }
 }
 
 function broadcast(data, skip = null) {
     for(let id in connections) if(id !== skip) connections[id].send(data);
 }
 
-// --- SISTEMA DE COMBATE ---
-function attack() {
-    if(selectedSlot !== 2) return; // Solo espada
-
-    // Atacar Slimes
-    slimes = slimes.filter(s => {
-        let d = Math.hypot(s.x - me.x, s.y - me.y);
-        return d > 60; // Si está cerca, muere (desaparece)
-    });
-
-    // Atacar Jugadores
-    for(let id in players) {
-        if(id === myId) continue;
-        let d = Math.hypot(players[id].x - me.x, players[id].y - me.y);
-        if(d < 60) {
-            let hitData = { type: 'hit', targetId: id };
-            if(isHost) broadcast(hitData);
-            else connections[Object.keys(connections)[0]].send(hitData);
-        }
-    }
+// --- ACCIONES ---
+function setSlot(n) {
+    selectedSlot = n; me.item = n;
+    document.querySelectorAll('.slot').forEach(s => s.classList.remove('active'));
+    document.getElementById('s'+n).classList.add('active');
 }
 
 function takeDamage(amt) {
     me.hp -= amt;
-    document.getElementById('damage-flash').style.opacity = 0.5;
-    setTimeout(() => document.getElementById('damage-flash').style.opacity = 0, 100);
-    if(me.hp <= 0) { alert("Has muerto"); location.reload(); }
+    document.getElementById('hp-fill').style.width = me.hp + "%";
+    document.getElementById('damage-overlay').style.opacity = 0.4;
+    setTimeout(() => document.getElementById('damage-overlay').style.opacity = 0, 100);
+    if(me.hp <= 0) { alert("¡Has caído en batalla!"); location.reload(); }
 }
 
-// --- FUNCIONES DE INICIO ---
+function interact() {
+    const worldX = Math.floor((me.x + 15) / TILE_SIZE);
+    const worldY = Math.floor((me.y + 20) / TILE_SIZE);
+
+    if(selectedSlot === 2) { // ATAQUE
+        // Atacar Slimes
+        slimes.forEach(s => {
+            if(Math.hypot(s.x - me.x, s.y - me.y) < 70) {
+                if(isHost) slimes = slimes.filter(sl => sl.id !== s.id);
+                broadcast({ type: 'slime_death', slimeId: s.id });
+            }
+        });
+        // Atacar Jugadores
+        for(let id in players) {
+            if(id === myId) continue;
+            if(Math.hypot(players[id].x - me.x, players[id].y - me.y) < 70) {
+                let hit = { type: 'hit', targetId: id };
+                if(isHost) broadcast(hit); else Object.values(connections)[0].send(hit);
+            }
+        }
+    } else if(selectedSlot === 3) { // CONSTRUIR
+        // Colocar roca delante
+        let bx = worldX, by = worldY;
+        if(world[bx] && world[bx][by] === 0) {
+            world[bx][by] = 2;
+            let bData = { type: 'build', x: bx, y: by, v: 2 };
+            if(isHost) broadcast(bData); else Object.values(connections)[0].send(bData);
+        }
+    }
+}
+
+// --- MOTOR DE JUEGO ---
 function startHost() {
-    isHost = true;
-    for(let x=0; x<30; x++) { world[x] = []; for(let y=0; y<30; y++) world[x][y] = Math.random() < 0.05 ? 1 : 0; }
-    for(let i=0; i<5; i++) slimes.push({ x: Math.random()*1000, y: Math.random()*1000, id: i });
-    
+    isHost = true; generateWorld();
+    me.name = document.getElementById('playerName').value || "Host";
     const peer = new Peer();
     peer.on('open', id => { myId = id; players[id] = me; document.getElementById('id-display').innerText = id; init(); });
     peer.on('connection', conn => {
-        conn.on('open', () => { connections[conn.peer] = conn; conn.send({ type: 'init', world, players, slimes }); });
+        conn.on('open', () => { connections[conn.peer] = conn; conn.send({ type: 'init', world, players, slimes }); updateUI(); });
         conn.on('data', data => handleData(data, conn.peer));
     });
 }
 
 function startJoin() {
-    const hostId = document.getElementById('joinId').value;
+    const hostId = document.getElementById('joinId').value.trim();
+    me.name = document.getElementById('playerName').value || "Player";
     const peer = new Peer();
     peer.on('open', id => {
         myId = id; players[id] = me;
@@ -136,53 +200,78 @@ function startJoin() {
     });
 }
 
-function setSlot(n) {
-    selectedSlot = n;
-    me.item = n;
-    document.querySelectorAll('.slot').forEach(s => s.classList.remove('active'));
-    document.getElementById('s'+n).classList.add('active');
-}
-
-let keys = {};
 function init() {
     document.getElementById('setup').style.display = 'none';
+    document.getElementById('hotbar').style.display = 'flex';
+    document.getElementById('player-tag').innerText = me.name;
     window.addEventListener('keydown', e => { 
         keys[e.key.toLowerCase()] = true;
         if(e.key === '1') setSlot(1); if(e.key === '2') setSlot(2); if(e.key === '3') setSlot(3);
     });
     window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
-    canvas.addEventListener('mousedown', attack);
+    canvas.addEventListener('mousedown', interact);
     requestAnimationFrame(loop);
 }
 
-function loop() {
-    if(keys['a']) me.x -= 5; if(keys['d']) me.x += 5;
-    if(keys['w']) me.y -= 5; if(keys['s']) me.y += 5;
+function updateAI() {
+    if(!isHost) return;
+    slimes.forEach(s => {
+        let target = Object.values(players)[0]; // Simplificado al primero
+        let angle = Math.atan2(target.y - s.y, target.x - s.x);
+        
+        // Evadir árboles/rocas
+        let nx = s.x + Math.cos(angle) * s.speed;
+        let ny = s.y + Math.sin(angle) * s.speed;
+        if(world[Math.floor(nx/64)] && world[Math.floor(nx/64)][Math.floor(ny/64)] !== 0) angle += 1.5;
 
+        s.x += Math.cos(angle) * s.speed;
+        s.y += Math.sin(angle) * s.speed;
+        
+        // Daño por contacto
+        if(Math.hypot(target.x - s.x, target.y - s.y) < 30) takeDamage(0.5); 
+    });
+}
+
+function loop() {
+    const s = 5;
+    if(keys['a']) me.x -= s; if(keys['d']) me.x += s;
+    if(keys['w']) me.y -= s; if(keys['s']) me.y += s;
+
+    if(isHost) updateAI();
     camera.x = me.x - canvas.width/2; camera.y = me.y - canvas.height/2;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.save();
-    ctx.translate(-camera.x, -camera.y);
+    ctx.save(); ctx.translate(-camera.x, -camera.y);
 
-    // Mundo
-    ctx.fillStyle = "#14532d";
-    for(let x=0; x<30; x++) for(let y=0; y<30; y++) if(world[x][y] === 1) ctx.fillRect(x*64, y*64, 60, 60);
+    // Dibujar Suelo y Objetos
+    for(let x=0; x<WORLD_SIZE; x++) {
+        for(let y=0; y<WORLD_SIZE; y++) {
+            if(world[x][y] === 1) { // Arbol
+                ctx.fillStyle = "#451a03"; ctx.fillRect(x*64+24, y*64+40, 16, 24);
+                ctx.fillStyle = "#14532d"; ctx.beginPath(); ctx.arc(x*64+32, y*64+20, 30, 0, 7); ctx.fill();
+            }
+            if(world[x][y] === 2) { // Roca
+                ctx.fillStyle = "#64748b"; ctx.beginPath(); ctx.arc(x*64+32, y*64+45, 18, 0, 7); ctx.fill();
+            }
+        }
+    }
 
     // Slimes
-    ctx.fillStyle = "lime";
-    slimes.forEach(s => ctx.beginPath() || ctx.arc(s.x, s.y, 20, 0, 7) || ctx.fill());
+    slimes.forEach(sl => {
+        ctx.fillStyle = "rgba(34, 197, 94, 0.8)";
+        ctx.beginPath(); ctx.ellipse(sl.x, sl.y, 20, 15 + Math.sin(Date.now()/200)*3, 0, 0, 7); ctx.fill();
+    });
 
     // Jugadores
     for(let id in players) {
         let p = players[id];
         if(id !== myId) { p.x += (p.targetX - p.x) * 0.15; p.y += (p.targetY - p.y) * 0.15; }
-        ctx.fillStyle = p.color;
-        ctx.fillRect(p.x-15, p.y-20, 30, 40);
-        ctx.fillStyle = "white"; ctx.fillText(p.name + (p.item === 2 ? " [⚔️]" : ""), p.x - 20, p.y - 30);
+        
+        ctx.fillStyle = p.color; ctx.fillRect(p.x-15, p.y-20, 30, 40);
+        ctx.fillStyle = "white"; ctx.textAlign = "center"; ctx.fillText(p.name + (p.item==2?" ⚔️":""), p.x, p.y-30);
     }
 
-    broadcast({ type: 'sync', x: me.x, y: me.y, item: me.item });
+    broadcast({ type: 'sync', x: me.x, y: me.y, item: me.item, hp: me.hp, slimes: isHost?slimes:null });
     ctx.restore();
     requestAnimationFrame(loop);
 }

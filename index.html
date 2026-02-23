@@ -3,40 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>RPG - Neo Genesis Mobile</title>
+    <title>RPG - Neo Genesis Fixed</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        :root { --primary: #38bdf8; --accent: #ef4444; --bg: #0f172a; --glass: rgba(15, 23, 42, 0.85); }
-        body { margin: 0; overflow: hidden; background: #070a0e; font-family: 'Segoe UI', sans-serif; display: flex; color: white; touch-action: none; }
-        #game-container { position: relative; flex-grow: 1; height: 100vh; overflow: hidden; }
+        :root { --primary: #38bdf8; --accent: #ef4444; --bg: #0f172a; --glass: rgba(15, 23, 42, 0.9); }
+        body { margin: 0; overflow: hidden; background: #070a0e; font-family: 'Segoe UI', sans-serif; color: white; touch-action: none; }
+        #game-container { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
         canvas { display: block; }
         .glass { background: var(--glass); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; }
         
-        /* UI de Setup */
-        #setup { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 30px; text-align: center; z-index: 1000; width: 85%; max-width: 320px; }
+        /* UI Setup */
+        #setup { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 30px; text-align: center; z-index: 1000; width: 85%; max-width: 320px; pointer-events: auto; }
         input { background: #1e293b; border: 1px solid #334155; color: white; padding: 12px; border-radius: 8px; width: 90%; margin-bottom: 10px; }
-        button { background: var(--primary); border: none; padding: 12px; font-weight: bold; border-radius: 8px; cursor: pointer; width: 100%; margin-top: 5px; }
+        button { background: var(--primary); border: none; padding: 12px; font-weight: bold; border-radius: 8px; cursor: pointer; width: 100%; margin-top: 5px; color: #000; }
 
-        /* HUD y Server Panel (Oculto en móvil por defecto para espacio) */
+        /* HUD */
         #hud { position: absolute; top: 15px; left: 15px; padding: 12px; min-width: 140px; pointer-events: none; z-index: 500; }
         .hp-container { height: 6px; background: #334155; border-radius: 3px; margin-top: 5px; overflow: hidden; }
         #hp-fill { height: 100%; width: 100%; background: #ef4444; transition: width 0.3s; }
         
-        #server-panel { width: 250px; padding: 20px; background: #0b1120; border-left: 1px solid rgba(255,255,255,0.1); display: none; }
+        #server-panel { position: absolute; top: 15px; right: 15px; width: 200px; padding: 15px; font-size: 12px; z-index: 500; display: none; }
         @media (min-width: 900px) { #server-panel { display: block; } }
 
         /* Hotbar */
         #hotbar { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; padding: 8px; z-index: 500; }
-        .slot { width: 45px; height: 45px; display: flex; justify-content: center; align-items: center; font-size: 20px; border-radius: 8px; background: rgba(255,255,255,0.05); }
+        .slot { width: 45px; height: 45px; display: flex; justify-content: center; align-items: center; font-size: 20px; border-radius: 8px; background: rgba(255,255,255,0.05); cursor: pointer; }
         .slot.active { background: var(--primary); color: #000; box-shadow: 0 0 15px var(--primary); }
 
-        /* Controles Móviles */
-        #mobile-controls { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: none; }
-        #joystick-zone { position: absolute; bottom: 40px; left: 40px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border-radius: 50%; pointer-events: auto; }
-        #joystick-stick { position: absolute; top: 35px; left: 35px; width: 50px; height: 50px; background: var(--primary); border-radius: 50%; opacity: 0.6; }
-        #attack-btn { position: absolute; bottom: 50px; right: 40px; width: 80px; height: 80px; background: var(--accent); border-radius: 50%; pointer-events: auto; display: flex; justify-content: center; align-items: center; font-size: 30px; box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); opacity: 0.8; }
-
-        #death-screen { display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.9); flex-direction: column; align-items: center; justify-content: center; z-index: 2000; }
+        /* Mobile Controls */
+        #mobile-controls { position: absolute; inset: 0; pointer-events: none; display: none; }
+        #joystick-zone { position: absolute; bottom: 40px; left: 40px; width: 100px; height: 100px; background: rgba(255,255,255,0.1); border-radius: 50%; pointer-events: auto; }
+        #joystick-stick { position: absolute; top: 30px; left: 30px; width: 40px; height: 40px; background: var(--primary); border-radius: 50%; pointer-events: none; }
+        #attack-btn { position: absolute; bottom: 40px; right: 40px; width: 70px; height: 70px; background: var(--accent); border-radius: 50%; pointer-events: auto; display: flex; justify-content: center; align-items: center; font-size: 24px; opacity: 0.8; }
     </style>
 </head>
 <body>
@@ -44,17 +42,19 @@
 <div id="game-container">
     <canvas id="game"></canvas>
     
-    <div id="hud" class="glass">
+    <div id="hud" class="glass" style="display:none">
         <div id="p-name" style="font-size: 14px; font-weight: bold;">Cargando...</div>
         <div class="hp-container"><div id="hp-fill"></div></div>
     </div>
 
     <div id="setup" class="glass">
-        <h1>NEO RPG</h1>
-        <input type="text" id="playerName" placeholder="Nombre">
-        <button onclick="startHost()">Crear Reino</button>
-        <input type="text" id="joinId" placeholder="ID del Reino" style="margin-top:15px">
-        <button onclick="startJoin()" style="background: #475569; color: white;">Unirse</button>
+        <h2 style="margin-top:0; color:var(--primary)">NEO GENESIS</h2>
+        <input type="text" id="playerName" placeholder="Tu Nombre">
+        <button id="btnHost">CREAR REINO</button>
+        <div style="margin: 10px; font-size: 11px; opacity: 0.5;">o únete con ID</div>
+        <input type="text" id="joinId" placeholder="ID del Host">
+        <button id="btnJoin" style="background: #475569; color: white;">UNIRSE</button>
+        <p id="status" style="font-size: 10px; margin-top: 10px;"></p>
     </div>
 
     <div id="mobile-controls">
@@ -67,17 +67,12 @@
         <div class="slot" onclick="setSlot(2)">⚔️</div>
         <div class="slot" onclick="setSlot(3)">🧱</div>
     </div>
-
-    <div id="death-screen">
-        <h1 style="color:var(--accent)">DERROTADO</h1>
-        <button onclick="respawn()" style="width:150px">VOLVER</button>
-    </div>
 </div>
 
-<div id="server-panel">
-    <h3 style="margin-top:0">📡 SERVER</h3>
-    <div id="id-display" style="background:#1e293b; padding:10px; border-radius:5px; font-size:10px; color:var(--primary); word-break:break-all; cursor:pointer;" onclick="copyId()">Generando...</div>
-    <h4>JUGADORES</h4>
+<div id="server-panel" class="glass">
+    <strong>ID Reino:</strong>
+    <div id="id-display" style="color:var(--primary); word-break:break-all; margin:5px 0; font-family:monospace;">---</div>
+    <strong>Jugadores:</strong>
     <div id="player-list"></div>
 </div>
 
@@ -90,16 +85,62 @@ canvas.height = window.innerHeight;
 let world = [], players = {}, slimes = [], connections = {}, peer = null;
 let myId = null, isHost = false, selectedSlot = 1, isDead = false;
 let camera = { x: 0, y: 0 }, keys = {};
-let me = { x: 1000, y: 1000, targetX: 1000, targetY: 1000, name: "...", color: "cyan", item: 1, hp: 100 };
+let me = { x: 1000, y: 1000, targetX: 1000, targetY: 1000, name: "", color: "cyan", item: 1, hp: 100 };
 
-// --- DETECCIÓN MÓVIL ---
+// Setup de botones corregido
+document.getElementById('btnHost').onclick = startHost;
+document.getElementById('btnJoin').onclick = startJoin;
+
 const isMobile = ('ontouchstart' in window);
 if(isMobile) document.getElementById('mobile-controls').style.display = 'block';
 
-// --- LOGICA DE RED + AUTO-BORRADO ---
+function startHost() {
+    isHost = true;
+    me.name = document.getElementById('playerName').value || "Rey";
+    document.getElementById('status').innerText = "Generando servidor...";
+    
+    // Generación Mundo
+    for(let x=0; x<40; x++){ world[x]=[]; for(let y=0; y<40; y++) world[x][y]=Math.random()<0.07?1:0; }
+    for(let i=0; i<6; i++) slimes.push({id:Math.random(), x:1100+Math.random()*200, y:1100+Math.random()*200});
+
+    peer = new Peer();
+    peer.on('open', id => {
+        myId = id; players[id] = me;
+        document.getElementById('id-display').innerText = id;
+        initGame();
+    });
+    peer.on('connection', conn => {
+        conn.on('open', () => {
+            connections[conn.peer] = conn;
+            conn.send({type:'init', world, players, slimes});
+        });
+        conn.on('data', data => handleData(data, conn.peer));
+        conn.on('close', () => { delete players[conn.peer]; broadcast({type:'leave', id:conn.peer}); updateUI(); });
+    });
+}
+
+function startJoin() {
+    const hostId = document.getElementById('joinId').value.trim();
+    if(!hostId) return alert("Ingresa un ID");
+    isHost = false;
+    me.name = document.getElementById('playerName').value || "Explorador";
+    
+    peer = new Peer();
+    peer.on('open', id => {
+        myId = id; players[id] = me;
+        const conn = peer.connect(hostId);
+        conn.on('open', () => {
+            connections[hostId] = conn;
+            conn.send({type:'join', p:me});
+            initGame();
+        });
+        conn.on('data', data => handleData(data, hostId));
+    });
+}
+
 function handleData(data, senderId) {
     if (data.type === 'init') { world = data.world; players = data.players; slimes = data.slimes; players[myId] = me; }
-    if (data.type === 'join') { players[senderId] = data.p; if(isHost) broadcast({ type: 'new', id: senderId, p: data.p }); updateUI(); }
+    if (data.type === 'join') { players[senderId] = data.p; if(isHost) broadcast({type:'new', id:senderId, p:data.p}); updateUI(); }
     if (data.type === 'new') { players[data.id] = data.p; updateUI(); }
     if (data.type === 'sync') {
         if(!players[senderId]) return;
@@ -107,59 +148,22 @@ function handleData(data, senderId) {
         players[senderId].item = data.item; players[senderId].hp = data.hp;
         if(isHost) broadcast(data, senderId);
     }
-    if (data.type === 'hit') { if(data.targetId === myId) takeDamage(15); }
-    if (data.type === 'slime_update' && !isHost) slimes = data.slimes;
+    if (data.type === 'hit' && data.targetId === myId) takeDamage(10);
     if (data.type === 'leave') { delete players[data.id]; updateUI(); }
+    if (data.type === 'slime_update' && !isHost) slimes = data.slimes;
 }
 
-function startHost() {
-    isHost = true;
-    for(let x=0; x<40; x++) { world[x]=[]; for(let y=0; y<40; y++) world[x][y] = Math.random()<0.07?1:0; }
-    for(let i=0; i<6; i++) slimes.push({id: i, x: 800+Math.random()*400, y: 800+Math.random()*400});
-    peer = new Peer();
-    peer.on('open', id => { myId=id; players[id]=me; document.getElementById('id-display').innerText=id; initGame(); });
-    peer.on('connection', conn => {
-        conn.on('open', () => { connections[conn.peer] = conn; conn.send({type:'init', world, players, slimes}); });
-        conn.on('data', data => handleData(data, conn.peer));
-        // Borrar cuando el invitado se desconecta
-        conn.on('close', () => removePlayer(conn.peer));
-    });
+function broadcast(data, skip = null) {
+    for(let id in connections) if(id !== skip) connections[id].send(data);
 }
 
-function startJoin() {
-    const hostId = document.getElementById('joinId').value.trim();
-    peer = new Peer();
-    peer.on('open', id => {
-        myId=id; players[id]=me;
-        const conn = peer.connect(hostId);
-        conn.on('open', () => { connections[hostId]=conn; conn.send({type:'join', p:me}); initGame(); });
-        conn.on('data', data => handleData(data, hostId));
-        conn.on('close', () => location.reload()); // Si el host cierra, reiniciamos
-    });
-}
-
-// Cuando alguien cierra la pestaña
-window.addEventListener('beforeunload', () => {
-    if(myId) {
-        broadcast({ type: 'leave', id: myId });
-        if(peer) peer.destroy();
-    }
-});
-
-function removePlayer(id) {
-    delete players[id];
-    delete connections[id];
-    broadcast({ type: 'leave', id: id });
-    updateUI();
-}
-
-// --- CONTROLES MÓVILES (JOYSTICK) ---
+// --- JOYSTICK ---
 let moveDir = { x: 0, y: 0 };
 if(isMobile) {
     const zone = document.getElementById('joystick-zone');
     const stick = document.getElementById('joystick-stick');
-    zone.addEventListener('touchstart', e => handleJoy(e));
-    zone.addEventListener('touchmove', e => handleJoy(e));
+    zone.addEventListener('touchstart', (e) => handleJoy(e));
+    zone.addEventListener('touchmove', (e) => handleJoy(e));
     zone.addEventListener('touchend', () => { moveDir = {x:0, y:0}; stick.style.transform = `translate(0,0)`; });
     document.getElementById('attack-btn').addEventListener('touchstart', (e) => { e.preventDefault(); interact(); });
 
@@ -169,21 +173,20 @@ if(isMobile) {
         const rect = zone.getBoundingClientRect();
         const centerX = rect.left + rect.width/2;
         const centerY = rect.top + rect.height/2;
-        let dx = t.clientX - centerX;
-        let dy = t.clientY - centerY;
-        const dist = Math.min(60, Math.hypot(dx, dy));
+        const dx = t.clientX - centerX;
+        const dy = t.clientY - centerY;
+        const dist = Math.min(40, Math.hypot(dx, dy));
         const angle = Math.atan2(dy, dx);
-        moveDir.x = Math.cos(angle) * (dist/60);
-        moveDir.y = Math.sin(angle) * (dist/60);
+        moveDir.x = Math.cos(angle) * (dist/40);
+        moveDir.y = Math.sin(angle) * (dist/40);
         stick.style.transform = `translate(${Math.cos(angle)*dist}px, ${Math.sin(angle)*dist}px)`;
     }
 }
 
-// --- GAME LOGIC ---
 function initGame() {
     document.getElementById('setup').style.display = 'none';
+    document.getElementById('hud').style.display = 'block';
     document.getElementById('hotbar').style.display = 'flex';
-    me.name = document.getElementById('playerName').value || "Héroe";
     document.getElementById('p-name').innerText = me.name;
     window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
     window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
@@ -196,86 +199,59 @@ function interact() {
         for(let id in players) {
             if(id === myId) continue;
             if(Math.hypot(players[id].x - me.x, players[id].y - me.y) < 80) {
-                let h = { type: 'hit', targetId: id };
-                if(isHost) broadcast(h); else connections[Object.keys(connections)[0]].send(h);
+                let h = { type:'hit', targetId:id };
+                if(isHost) broadcast(h); else Object.values(connections)[0].send(h);
             }
         }
     }
 }
 
 function loop() {
-    if(!isDead) {
-        const vel = 5;
-        if(isMobile) {
-            me.x += moveDir.x * vel; me.y += moveDir.y * vel;
-        } else {
-            if(keys['a']) me.x -= vel; if(keys['d']) me.x += vel;
-            if(keys['w']) me.y -= vel; if(keys['s']) me.y += vel;
-        }
+    const v = 5;
+    if(isMobile) { me.x += moveDir.x*v; me.y += moveDir.y*v; }
+    else {
+        if(keys['a']) me.x -= v; if(keys['d']) me.x += v;
+        if(keys['w']) me.y -= v; if(keys['s']) me.y += v;
     }
     players[myId] = me;
     camera.x = me.x - canvas.width/2; camera.y = me.y - canvas.height/2;
 
-    ctx.clearRect(0,0,canvas.width, canvas.height);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.save(); ctx.translate(-camera.x, -camera.y);
 
-    // Dibujar Árboles
+    // Arboles
     ctx.fillStyle = "#1e3a1e";
-    for(let x=0; x<world.length; x++) for(let y=0; y<world[x].length; y++) 
+    for(let x=0; x<world.length; x++) for(let y=0; y<world[x].length; y++)
         if(world[x][y] === 1) { ctx.beginPath(); ctx.arc(x*64+32, y*64+32, 25, 0, 7); ctx.fill(); }
 
-    // Jugadores y Sync
-    for(let id in players) {
-        let p = players[id];
-        if(id !== myId) { p.x += (p.targetX - p.x) * 0.2; p.y += (p.targetY - p.y) * 0.2; }
-        else { broadcast({ type: 'sync', x: me.x, y: me.y, item: me.item, hp: me.hp }); }
-        
-        ctx.fillStyle = p.hp <= 0 ? "#444" : (id === myId ? "#38bdf8" : "#f472b6");
-        ctx.fillRect(p.x-15, p.y-20, 30, 40);
-        ctx.fillStyle = "white"; ctx.textAlign = "center"; ctx.fillText(p.name + (p.item==2?" ⚔️":""), p.x, p.y-30);
-    }
-    
-    // Slimes IA
+    // IA Host
     if(isHost) {
         slimes.forEach(s => {
-            let angle = Math.atan2(me.y - s.y, me.x - s.x);
-            s.x += Math.cos(angle)*1.2; s.y += Math.sin(angle)*1.2;
+            let a = Math.atan2(me.y-s.y, me.x-s.x);
+            s.x += Math.cos(a)*1.3; s.y += Math.sin(a)*1.3;
             if(Math.hypot(me.x-s.x, me.y-s.y)<30) takeDamage(0.2);
         });
-        broadcast({ type: 'slime_update', slimes });
+        broadcast({type:'slime_update', slimes});
     }
-    ctx.fillStyle = "#4ade80";
-    slimes.forEach(s => { ctx.beginPath(); ctx.ellipse(s.x, s.y, 15, 12, 0, 0, 7); ctx.fill(); });
 
+    ctx.fillStyle = "#4ade80"; slimes.forEach(s => { ctx.beginPath(); ctx.ellipse(s.x, s.y, 15, 12, 0, 0, 7); ctx.fill(); });
+
+    // Jugadores
+    for(let id in players) {
+        let p = players[id];
+        if(id !== myId) { p.x += (p.targetX - p.x)*0.2; p.y += (p.targetY - p.y)*0.2; }
+        else { broadcast({type:'sync', x:me.x, y:me.y, item:me.item, hp:me.hp}); }
+        ctx.fillStyle = id === myId ? "#38bdf8" : "#f472b6";
+        ctx.fillRect(p.x-15, p.y-20, 30, 40);
+        ctx.fillStyle = "white"; ctx.textAlign="center"; ctx.fillText(p.name, p.x, p.y-25);
+    }
     ctx.restore();
     requestAnimationFrame(loop);
 }
 
-function takeDamage(amt) {
-    if(isDead) return;
-    me.hp -= amt;
-    document.getElementById('hp-fill').style.width = me.hp + "%";
-    if(me.hp <= 0) { isDead = true; document.getElementById('death-screen').style.display = 'flex'; }
-}
-
-function respawn() {
-    me.hp = 100; me.x = 1000; me.y = 1000; isDead = false;
-    document.getElementById('hp-fill').style.width = "100%";
-    document.getElementById('death-screen').style.display = 'none';
-}
-
-function setSlot(n) {
-    selectedSlot = n; me.item = n;
-    document.querySelectorAll('.slot').forEach((s,i) => s.classList.toggle('active', i === n-1));
-}
-
-function updateUI() {
-    document.getElementById('player-list').innerHTML = Object.values(players).map(p => `• ${p.name}`).join('<br>');
-}
-function copyId() {
-    navigator.clipboard.writeText(document.getElementById('id-display').innerText);
-    alert("ID Copiado");
-}
+function takeDamage(a) { me.hp -= a; document.getElementById('hp-fill').style.width = me.hp+"%"; if(me.hp<=0) location.reload(); }
+function setSlot(n) { selectedSlot = n; me.item = n; document.querySelectorAll('.slot').forEach((s,i)=>s.classList.toggle('active', i===n-1)); }
+function updateUI() { document.getElementById('player-list').innerHTML = Object.values(players).map(p=>`• ${p.name}`).join('<br>'); }
 </script>
 </body>
 </html>

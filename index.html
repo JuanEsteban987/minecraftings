@@ -25,27 +25,15 @@ background:#0008;padding:8px;border-radius:10px;font-size:14px
 </head>
 <body>
 
-<!-- MENU -->
 <div id="menu" class="panel">
 <h3>Minecraft RPG 2D</h3>
-
-Nombre:
 <input id="name" placeholder="Tu nombre">
-
-Skin:
 <select id="skin">
-<option>😀</option>
-<option>😎</option>
-<option>🤠</option>
-<option>👽</option>
-<option>🤖</option>
-<option>🐸</option>
+<option>😀</option><option>😎</option><option>🤠</option>
+<option>👽</option><option>🤖</option><option>🐸</option>
 <option>🐱</option>
 </select>
-
-Código sala:
-<input id="roomInput" placeholder="Si está vacío crea sala">
-
+<input id="roomInput" placeholder="Código sala (vacío = crear)">
 <button onclick="enter()">ENTRAR</button>
 </div>
 
@@ -64,34 +52,20 @@ const ctx=canvas.getContext("2d");
 canvas.width=innerWidth;
 canvas.height=innerHeight;
 
-let ws;
-let peers={};
-let players={};
-let keys={};
+let ws,room,myId=Math.random().toString(36).substr(2,9);
+let peers={},players={},keys={},started=false;
 
-let myId=Math.random().toString(36).substr(2,9);
-let room="";
-let started=false;
-
-let me={
-x:1500,y:1500,
-emoji:"😀",
-name:"Player"
-};
-
+let me={x:1500,y:1500,emoji:"😀",name:"Player"};
 players[myId]=me;
 
 const TREES=[];
-for(let i=0;i<50;i++){
+for(let i=0;i<40;i++)
 TREES.push({x:Math.random()*3000,y:Math.random()*3000});
-}
 
 function enter(){
 me.name=document.getElementById("name").value||"Player";
 me.emoji=document.getElementById("skin").value;
-
-room=document.getElementById("roomInput").value;
-if(!room) room=Math.random().toString(36).substr(2,6);
+room=document.getElementById("roomInput").value||Math.random().toString(36).substr(2,6);
 
 document.getElementById("menu").style.display="none";
 document.getElementById("ui").style.display="block";
@@ -106,22 +80,28 @@ ws=new WebSocket("wss://y-webrtc-signaling-eu.herokuapp.com");
 
 ws.onopen=()=>{
 ws.send(JSON.stringify({type:"join",room,from:myId}));
-setTimeout(()=>ws.send(JSON.stringify({type:"peers",room,from:myId})),500);
+
+// anuncio presencia cada 2s para detectar jugadores
+setInterval(()=>{
+ws.send(JSON.stringify({type:"announce",room,from:myId}));
+},2000);
 };
 
 ws.onmessage=async e=>{
 let msg=JSON.parse(e.data);
-if(msg.from===myId)return;
+if(msg.from===myId) return;
 
-if(msg.type==="peers"){
-let pc=createPeer(msg.from);
+if(msg.type==="announce"){
+if(!peers[msg.from]){
+let pc=createPeer(msg.from,true);
 let offer=await pc.createOffer();
 await pc.setLocalDescription(offer);
 ws.send(JSON.stringify({type:"offer",offer,to:msg.from,room,from:myId}));
 }
+}
 
 if(msg.type==="offer"){
-let pc=createPeer(msg.from);
+let pc=createPeer(msg.from,false);
 await pc.setRemoteDescription(msg.offer);
 let ans=await pc.createAnswer();
 await pc.setLocalDescription(ans);
@@ -139,15 +119,16 @@ await peers[msg.from].addIceCandidate(msg.candidate);
 };
 }
 
-function createPeer(id){
+function createPeer(id,init){
 let pc=new RTCPeerConnection({
 iceServers:[{urls:"stun:stun.l.google.com:19302"}]
 });
 peers[id]=pc;
 
+if(init){
 let dc=pc.createDataChannel("game");
 setupDC(id,dc);
-
+}
 pc.ondatachannel=e=>setupDC(id,e.channel);
 
 pc.onicecandidate=e=>{
@@ -159,14 +140,12 @@ to:id,room,from:myId
 }));
 }
 };
-
 return pc;
 }
 
 function setupDC(id,dc){
 dc.onmessage=e=>{
 let data=JSON.parse(e.data);
-
 if(data.type==="state") players[id]=data.player;
 if(data.type==="chat") addChat(data.name+": "+data.msg);
 };
@@ -176,18 +155,16 @@ peers[id].dc=dc;
 function sendState(){
 for(let id in peers){
 let dc=peers[id].dc;
-if(dc && dc.readyState==="open"){
+if(dc && dc.readyState==="open")
 dc.send(JSON.stringify({type:"state",player:me}));
-}
 }
 }
 
 function sendChat(m){
 for(let id in peers){
 let dc=peers[id].dc;
-if(dc && dc.readyState==="open"){
+if(dc && dc.readyState==="open")
 dc.send(JSON.stringify({type:"chat",msg:m,name:me.name}));
-}
 }
 addChat(me.name+": "+m);
 }
@@ -210,20 +187,17 @@ addEventListener("keyup",e=>keys[e.key]=false);
 
 function update(){
 if(!started)return;
-
 let sp=4;
 if(keys["w"])me.y-=sp;
 if(keys["s"])me.y+=sp;
 if(keys["a"])me.x-=sp;
 if(keys["d"])me.x+=sp;
-
 sendState();
 }
 
 function draw(){
 ctx.fillStyle="#3a7";
 ctx.fillRect(0,0,canvas.width,canvas.height);
-
 if(!started)return;
 
 let camX=me.x-canvas.width/2;
@@ -246,11 +220,7 @@ document.getElementById("players").innerHTML=
 "👥 "+Object.keys(players).length+" jugadores";
 }
 
-function loop(){
-update();
-draw();
-requestAnimationFrame(loop);
-}
+function loop(){update();draw();requestAnimationFrame(loop);}
 loop();
 </script>
 </body>

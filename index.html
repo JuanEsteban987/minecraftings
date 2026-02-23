@@ -2,220 +2,192 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>RPG Slime - Fixed Hotbar</title>
+    <title>RPG - Combat & Fix</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #2d5a27; font-family: 'Segoe UI', sans-serif; display: flex; }
+        body { margin: 0; overflow: hidden; background: #2d5a27; font-family: sans-serif; display: flex; }
         #game-container { position: relative; flex-grow: 1; height: 100vh; }
-        canvas { display: block; background: #3e7c37; cursor: crosshair; }
-        
-        /* Panel Lateral */
-        #server-panel { width: 260px; background: #1e293b; color: white; padding: 20px; border-left: 4px solid #38bdf8; }
-        .code-box { background: #0f172a; padding: 10px; border-radius: 5px; color: #38bdf8; font-family: monospace; font-size: 12px; margin: 10px 0; border: 1px solid #334155; }
-        
-        /* Hotbar */
-        #hotbar { position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; pointer-events: auto; background: rgba(0,0,0,0.5); padding: 8px; border-radius: 10px; }
-        .slot { width: 50px; height: 50px; background: #334155; border: 3px solid #64748b; border-radius: 5px; display: flex; justify-content: center; align-items: center; color: white; cursor: pointer; font-size: 24px; transition: 0.2s; position: relative; }
-        .slot:hover { background: #475569; }
-        .slot.active { border-color: #38bdf8; background: #1e293b; box-shadow: 0 0 15px #38bdf8; }
-        .slot-key { position: absolute; top: 2px; left: 4px; font-size: 10px; color: #94a3b8; }
-
-        .menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1e293b; padding: 30px; border-radius: 15px; text-align: center; color: white; border: 2px solid #38bdf8; z-index: 500; }
-        input { padding: 10px; border-radius: 5px; border: none; margin: 5px; width: 200px; }
-        button { background: #38bdf8; border: none; padding: 10px 20px; font-weight: bold; border-radius: 5px; cursor: pointer; margin-top: 10px; }
+        canvas { display: block; background: #3e7c37; }
+        #server-panel { width: 250px; background: #1e293b; color: white; padding: 20px; border-left: 4px solid #38bdf8; }
+        .code-box { background: #0f172a; padding: 10px; border-radius: 5px; color: #38bdf8; font-family: monospace; font-size: 11px; }
+        #hotbar { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; pointer-events: auto; }
+        .slot { width: 50px; height: 50px; background: rgba(0,0,0,0.6); border: 2px solid #64748b; border-radius: 5px; display: flex; justify-content: center; align-items: center; color: white; cursor: pointer; font-size: 24px; }
+        .slot.active { border-color: #38bdf8; box-shadow: 0 0 10px #38bdf8; }
+        .menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1e293b; padding: 30px; border-radius: 15px; text-align: center; color: white; border: 2px solid #38bdf8; z-index: 1000; }
+        #damage-flash { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: red; opacity: 0; pointer-events: none; }
     </style>
 </head>
 <body>
 
 <div id="game-container">
     <canvas id="game"></canvas>
-    
+    <div id="damage-flash"></div>
     <div id="setup" class="menu">
-        <h2>RPG MULTIPLAYER</h2>
-        <input type="text" id="playerName" placeholder="Tu Nombre">
-        <button onclick="startHost()">CREAR SERVIDOR</button>
-        <hr style="opacity: 0.2; margin: 15px;">
-        <input type="text" id="joinId" placeholder="ID del Host">
-        <button onclick="startJoin()" style="background: #94a3b8;">UNIRSE</button>
-        <p id="status" style="font-size: 12px; color: #38bdf8; margin-top: 10px;">Listo para empezar</p>
+        <h2>BATALLA RPG</h2>
+        <input type="text" id="playerName" placeholder="Nombre" style="padding:10px; margin:5px;"><br>
+        <button onclick="startHost()" style="padding:10px; cursor:pointer;">HOSTEAR</button>
+        <button onclick="startJoin()" style="padding:10px; cursor:pointer;">UNIRSE</button>
+        <input type="text" id="joinId" placeholder="ID del Host" style="padding:10px; margin:5px;">
     </div>
-
     <div id="hotbar">
-        <div class="slot active" id="slot-1" onclick="setSlot(1)"><span class="slot-key">1</span>👊</div>
-        <div class="slot" id="slot-2" onclick="setSlot(2)"><span class="slot-key">2</span>⚔️</div>
-        <div class="slot" id="slot-3" onclick="setSlot(3)"><span class="slot-key">3</span>🧱</div>
+        <div class="slot active" id="s1" onclick="setSlot(1)">👊</div>
+        <div class="slot" id="s2" onclick="setSlot(2)">⚔️</div>
+        <div class="slot" id="s3" onclick="setSlot(3)">🧱</div>
     </div>
 </div>
 
 <div id="server-panel">
-    <h3>📡 SERVIDOR</h3>
-    <p style="font-size: 11px;">Comparte el ID:</p>
-    <div id="id-display" class="code-box">Esperando...</div>
+    <h3>📡 SERVER</h3>
+    <div id="id-display" class="code-box">...</div>
     <h4>JUGADORES</h4>
-    <div id="player-list" style="font-size: 13px; color: #38bdf8;"></div>
+    <div id="player-list"></div>
 </div>
 
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-canvas.width = window.innerWidth - 260;
+canvas.width = window.innerWidth - 250;
 canvas.height = window.innerHeight;
 
 const TILE_SIZE = 64;
-const WORLD_SIZE = 50;
-let world = [];
-let players = {};
-let slimes = [];
-let connections = {};
-let myId = null;
-let isHost = false;
-let selectedSlot = 1; // 1: Nada, 2: Espada, 3: Bloque
+let world = [], players = {}, slimes = [], connections = {}, myId = null, isHost = false, selectedSlot = 1;
 let camera = { x: 0, y: 0 };
+let me = { x: 400, y: 400, targetX: 400, targetY: 400, name: "Yo", color: "#38bdf8", item: 1, hp: 100 };
 
-let me = { x: 500, y: 500, name: "Héroe", color: "#38bdf8", item: 1 };
-
-// --- MUNDO ---
-function initWorld() {
-    for(let x=0; x<WORLD_SIZE; x++) {
-        world[x] = Array(WORLD_SIZE).fill(0);
-        for(let y=0; y<WORLD_SIZE; y++) {
-            if(Math.random() < 0.05) world[x][y] = 1; // Arbol
-        }
-    }
-}
-
-// --- HOTBAR LOGIC ---
-function setSlot(n) {
-    selectedSlot = n;
-    me.item = n;
-    document.querySelectorAll('.slot').forEach(s => s.classList.remove('active'));
-    document.getElementById('slot-' + n).classList.add('active');
-}
-
-// --- NETWORKING ---
-function startHost() {
-    isHost = true; initWorld();
-    me.name = document.getElementById('playerName').value || "Host";
-    const peer = new Peer();
-    peer.on('open', id => { 
-        myId = id; players[id] = me; 
-        document.getElementById('id-display').innerText = id;
-        init(); 
-    });
-    peer.on('connection', conn => {
-        conn.on('open', () => {
-            connections[conn.peer] = conn;
-            conn.send({ type: 'init', world, players });
-        });
-        conn.on('data', data => handleData(data, conn.peer));
-    });
-}
-
-function startJoin() {
-    isHost = false;
-    const hostId = document.getElementById('joinId').value.trim();
-    me.name = document.getElementById('playerName').value || "Guest";
-    const peer = new Peer();
-    peer.on('open', id => {
-        myId = id; players[id] = me;
-        const conn = peer.connect(hostId);
-        conn.on('open', () => {
-            connections[hostId] = conn;
-            conn.send({ type: 'join', p: me });
-            init();
-        });
-        conn.on('data', data => handleData(data, hostId));
-    });
-}
-
+// --- LOGICA DE RED (LA CLAVE DEL ARREGLO) ---
 function handleData(data, senderId) {
-    if (data.type === 'init') { world = data.world; players = data.players; }
-    if (data.type === 'join') { players[senderId] = data.p; if(isHost) broadcast({type:'new', id:senderId, p:data.p}); updateList(); }
-    if (data.type === 'new') { players[data.id] = data.p; updateList(); }
-    if (data.type === 'sync') { 
-        if(players[senderId]) { players[senderId].x = data.x; players[senderId].y = data.y; players[senderId].item = data.item; }
-        if(isHost) broadcast(data, senderId);
+    if (data.type === 'init') { world = data.world; players = data.players; slimes = data.slimes; }
+    if (data.type === 'join') { 
+        players[senderId] = data.p; 
+        if(isHost) broadcast({ type: 'new', id: senderId, p: data.p }); 
+        updateUI();
     }
-    if (data.type === 'build') { world[data.x][data.y] = data.v; }
+    if (data.type === 'new') { players[data.id] = data.p; updateUI(); }
+    
+    // El Host reenvía la posición a TODOS para que el invitado se vea mover
+    if (data.type === 'sync') {
+        if(!players[senderId]) return;
+        players[senderId].targetX = data.x;
+        players[senderId].targetY = data.y;
+        players[senderId].item = data.item;
+        if(isHost) broadcast(data, senderId); // RELEVÓ: Envía a los demás
+    }
+    
+    if (data.type === 'hit') {
+        if(data.targetId === myId) takeDamage(10);
+    }
 }
 
 function broadcast(data, skip = null) {
     for(let id in connections) if(id !== skip) connections[id].send(data);
 }
 
-// --- GAME LOOP ---
+// --- SISTEMA DE COMBATE ---
+function attack() {
+    if(selectedSlot !== 2) return; // Solo espada
+
+    // Atacar Slimes
+    slimes = slimes.filter(s => {
+        let d = Math.hypot(s.x - me.x, s.y - me.y);
+        return d > 60; // Si está cerca, muere (desaparece)
+    });
+
+    // Atacar Jugadores
+    for(let id in players) {
+        if(id === myId) continue;
+        let d = Math.hypot(players[id].x - me.x, players[id].y - me.y);
+        if(d < 60) {
+            let hitData = { type: 'hit', targetId: id };
+            if(isHost) broadcast(hitData);
+            else connections[Object.keys(connections)[0]].send(hitData);
+        }
+    }
+}
+
+function takeDamage(amt) {
+    me.hp -= amt;
+    document.getElementById('damage-flash').style.opacity = 0.5;
+    setTimeout(() => document.getElementById('damage-flash').style.opacity = 0, 100);
+    if(me.hp <= 0) { alert("Has muerto"); location.reload(); }
+}
+
+// --- FUNCIONES DE INICIO ---
+function startHost() {
+    isHost = true;
+    for(let x=0; x<30; x++) { world[x] = []; for(let y=0; y<30; y++) world[x][y] = Math.random() < 0.05 ? 1 : 0; }
+    for(let i=0; i<5; i++) slimes.push({ x: Math.random()*1000, y: Math.random()*1000, id: i });
+    
+    const peer = new Peer();
+    peer.on('open', id => { myId = id; players[id] = me; document.getElementById('id-display').innerText = id; init(); });
+    peer.on('connection', conn => {
+        conn.on('open', () => { connections[conn.peer] = conn; conn.send({ type: 'init', world, players, slimes }); });
+        conn.on('data', data => handleData(data, conn.peer));
+    });
+}
+
+function startJoin() {
+    const hostId = document.getElementById('joinId').value;
+    const peer = new Peer();
+    peer.on('open', id => {
+        myId = id; players[id] = me;
+        const conn = peer.connect(hostId);
+        conn.on('open', () => { connections[hostId] = conn; conn.send({ type: 'join', p: me }); init(); });
+        conn.on('data', data => handleData(data, hostId));
+    });
+}
+
+function setSlot(n) {
+    selectedSlot = n;
+    me.item = n;
+    document.querySelectorAll('.slot').forEach(s => s.classList.remove('active'));
+    document.getElementById('s'+n).classList.add('active');
+}
+
 let keys = {};
 function init() {
     document.getElementById('setup').style.display = 'none';
-    window.addEventListener('keydown', e => {
+    window.addEventListener('keydown', e => { 
         keys[e.key.toLowerCase()] = true;
-        if(e.key === '1') setSlot(1);
-        if(e.key === '2') setSlot(2);
-        if(e.key === '3') setSlot(3);
+        if(e.key === '1') setSlot(1); if(e.key === '2') setSlot(2); if(e.key === '3') setSlot(3);
     });
     window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
-
-    canvas.addEventListener('mousedown', (e) => {
-        if(selectedSlot === 3) { // MODO CONSTRUIR
-            const worldX = Math.floor((e.clientX + camera.x) / TILE_SIZE);
-            const worldY = Math.floor((e.clientY + camera.y) / TILE_SIZE);
-            if(world[worldX] && world[worldX][worldY] === 0) {
-                world[worldX][worldY] = 1; // Poner árbol/bloque
-                const buildData = { type: 'build', x: worldX, y: worldY, v: 1 };
-                if(isHost) broadcast(buildData);
-                else Object.values(connections)[0].send(buildData);
-            }
-        }
-    });
-
+    canvas.addEventListener('mousedown', attack);
     requestAnimationFrame(loop);
 }
 
 function loop() {
-    const speed = 5;
-    if(keys['a']) me.x -= speed;
-    if(keys['d']) me.x += speed;
-    if(keys['w']) me.y -= speed;
-    if(keys['s']) me.y += speed;
+    if(keys['a']) me.x -= 5; if(keys['d']) me.x += 5;
+    if(keys['w']) me.y -= 5; if(keys['s']) me.y += 5;
 
-    camera.x = me.x - canvas.width/2;
-    camera.y = me.y - canvas.height/2;
+    camera.x = me.x - canvas.width/2; camera.y = me.y - canvas.height/2;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     ctx.translate(-camera.x, -camera.y);
 
-    // Dibujar Mundo
-    for(let x=0; x<WORLD_SIZE; x++) {
-        for(let y=0; y<WORLD_SIZE; y++) {
-            if(world[x][y] === 1) {
-                ctx.fillStyle = "#14532d"; 
-                ctx.fillRect(x*TILE_SIZE+10, y*TILE_SIZE+10, TILE_SIZE-20, TILE_SIZE-20);
-            }
-        }
-    }
+    // Mundo
+    ctx.fillStyle = "#14532d";
+    for(let x=0; x<30; x++) for(let y=0; y<30; y++) if(world[x][y] === 1) ctx.fillRect(x*64, y*64, 60, 60);
 
-    // Dibujar Jugadores
+    // Slimes
+    ctx.fillStyle = "lime";
+    slimes.forEach(s => ctx.beginPath() || ctx.arc(s.x, s.y, 20, 0, 7) || ctx.fill());
+
+    // Jugadores
     for(let id in players) {
         let p = players[id];
+        if(id !== myId) { p.x += (p.targetX - p.x) * 0.15; p.y += (p.targetY - p.y) * 0.15; }
         ctx.fillStyle = p.color;
         ctx.fillRect(p.x-15, p.y-20, 30, 40);
-        
-        // Mostrar qué item tiene en la mano
-        if(p.item === 2) ctx.fillText("⚔️", p.x + 20, p.y);
-        if(p.item === 3) ctx.fillText("🧱", p.x + 20, p.y);
-        
-        ctx.fillStyle = "white";
-        ctx.textAlign = "center";
-        ctx.fillText(p.name, p.x, p.y - 30);
+        ctx.fillStyle = "white"; ctx.fillText(p.name + (p.item === 2 ? " [⚔️]" : ""), p.x - 20, p.y - 30);
     }
-    
-    broadcast({type:'sync', x:me.x, y:me.y, item:me.item});
+
+    broadcast({ type: 'sync', x: me.x, y: me.y, item: me.item });
     ctx.restore();
     requestAnimationFrame(loop);
 }
 
-function updateList() {
+function updateUI() {
     document.getElementById('player-list').innerHTML = Object.values(players).map(p => `• ${p.name}`).join('<br>');
 }
 </script>

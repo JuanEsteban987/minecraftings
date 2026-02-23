@@ -9,14 +9,39 @@ margin:0;
 background:#1b1b1b;
 color:white;
 font-family:sans-serif;
-text-align:center
+overflow:hidden;
 }
+
+#menu{
+text-align:center;
+padding:20px;
+}
+
 canvas{
 background:#6ec6ff;
-display:block;
-margin:auto
+display:none;
 }
-#menu{padding:20px}
+
+/* HUD lateral */
+#hud{
+position:fixed;
+right:10px;
+top:10px;
+background:rgba(0,0,0,.5);
+padding:10px;
+border-radius:8px;
+display:none;
+width:240px;
+}
+
+#roomCode{
+word-break:break-all;
+background:#111;
+padding:6px;
+border-radius:6px;
+margin-top:5px;
+font-size:12px;
+}
 </style>
 </head>
 <body>
@@ -26,12 +51,14 @@ margin:auto
 <input id="name" placeholder="tu nombre"><br><br>
 <button onclick="host()">HOST</button>
 <button onclick="join()">JOIN</button>
-<br><br>
-<input id="code" placeholder="codigo">
-<p id="info"></p>
 </div>
 
-<canvas id="game" width="900" height="550" style="display:none"></canvas>
+<div id="hud">
+<b>🎮 Código de la partida:</b>
+<div id="roomCode">---</div>
+</div>
+
+<canvas id="game" width="900" height="550"></canvas>
 
 <script>
 // ---------- WEBRTC ----------
@@ -39,6 +66,7 @@ let pc, channel;
 let isHost=false;
 let players={};
 let myId=Math.random().toString(36).slice(2);
+let roomCode="";
 
 function host(){
 isHost=true;
@@ -68,9 +96,8 @@ players=JSON.parse(ev.data);
 
 pc.onicecandidate=e=>{
 if(!e.candidate){
-let code=btoa(JSON.stringify(pc.localDescription));
-document.getElementById("code").value=code;
-document.getElementById("info").textContent="Comparte este código";
+roomCode=btoa(JSON.stringify(pc.localDescription));
+document.getElementById("roomCode").textContent=roomCode;
 }
 };
 
@@ -87,7 +114,7 @@ pc.setRemoteDescription(desc)
 startGame();
 }
 
-// ---------- JUEGO RPG ----------
+// ---------- JUEGO ----------
 const canvas=document.getElementById("game");
 const ctx=canvas.getContext("2d");
 
@@ -99,7 +126,7 @@ let me={
 x:450,
 y:280,
 emoji:"🧑",
-name:"",
+name:""
 };
 
 // 🌳 mundo con árboles emoji
@@ -117,24 +144,24 @@ world[y][x]=Math.random()<0.08?"🌳":"";
 
 function startGame(){
 me.name=document.getElementById("name").value||"Jugador";
+
 document.getElementById("menu").style.display="none";
+document.getElementById("hud").style.display="block";
 canvas.style.display="block";
+
 loop();
 }
 
 // ---------- LOGICA ----------
 function update(){
-
 let sp=3;
 if(keys["w"]) me.y-=sp;
 if(keys["s"]) me.y+=sp;
 if(keys["a"]) me.x-=sp;
 if(keys["d"]) me.x+=sp;
 
-// guardar mi estado
 players[myId]=me;
 
-// enviar a peers
 if(channel && channel.readyState==="open"){
 channel.send(JSON.stringify(players));
 }
@@ -142,30 +169,24 @@ channel.send(JSON.stringify(players));
 
 // ---------- DIBUJO ----------
 function draw(){
-
 ctx.clearRect(0,0,canvas.width,canvas.height);
 
-// dibujar pasto
+// pasto
 ctx.fillStyle="#3cb043";
 ctx.fillRect(0,0,canvas.width,canvas.height);
 
-// árboles emoji
+// árboles
 ctx.font="28px serif";
 for(let y=0;y<MAP_H;y++){
 for(let x=0;x<MAP_W;x++){
 let t=world[y][x];
 if(t){
-ctx.fillText(
-t,
-x*TILE,
-y*TILE+30
-);
+ctx.fillText(t,x*TILE,y*TILE+30);
 }
 }
 }
 
-// players
-ctx.font="24px serif";
+// jugadores
 ctx.textAlign="center";
 
 for(let id in players){
@@ -177,7 +198,7 @@ ctx.fillStyle="white";
 ctx.font="14px sans-serif";
 ctx.fillText(p.name,p.x,p.y-18);
 
-// emoji skin
+// emoji
 ctx.font="26px serif";
 ctx.fillText(p.emoji,p.x,p.y);
 }

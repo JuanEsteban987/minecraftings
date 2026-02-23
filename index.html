@@ -2,105 +2,80 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Minecraft RPG P2P</title>
+<title>Minecraft RPG Online</title>
 <style>
-body{
-margin:0;
-background:#1b1b1b;
-color:white;
-font-family:sans-serif;
-overflow:hidden;
-}
-
-#menu{
-text-align:center;
-padding:20px;
-}
-
-canvas{
-background:#6ec6ff;
-display:none;
-}
-
-/* HUD lateral */
+body{margin:0;background:#1b1b1b;color:white;font-family:sans-serif;overflow:hidden}
+#menu{text-align:center;padding:20px}
+canvas{background:#6ec6ff;display:none}
 #hud{
 position:fixed;
 right:10px;
 top:10px;
-background:rgba(0,0,0,.5);
-padding:10px;
-border-radius:8px;
+background:rgba(0,0,0,.6);
+padding:12px;
+border-radius:10px;
 display:none;
-width:240px;
-}
-
-#roomCode{
-word-break:break-all;
-background:#111;
-padding:6px;
-border-radius:6px;
-margin-top:5px;
-font-size:12px;
+width:260px;
 }
 </style>
 </head>
 <body>
 
 <div id="menu">
-<h2>Minecraft RPG P2P</h2>
+<h2>Minecraft RPG Online</h2>
 <input id="name" placeholder="tu nombre"><br><br>
 <button onclick="host()">HOST</button>
-<button onclick="join()">JOIN</button>
+<button onclick="join()">JOIN</button><br><br>
+<input id="roomInput" placeholder="codigo sala">
 </div>
 
 <div id="hud">
-<b>🎮 Código de la partida:</b>
-<div id="roomCode">---</div>
+<b>🎮 Sala:</b> <span id="roomLabel"></span><br>
+<b>👥 Jugadores:</b>
+<div id="playersList"></div>
 </div>
 
 <canvas id="game" width="900" height="550"></canvas>
 
 <script>
-// ---------- WEBRTC ----------
-let pc, channel;
-let isHost=false;
-let players={};
+// ---------- SALAS ----------
+let socket=new WebSocket("wss://signaling.simplewebrtc.com");
+let room=null;
 let myId=Math.random().toString(36).slice(2);
-let roomCode="";
+let peers={};
+let players={};
 
-function host(){ isHost=true; startRTC(); }
-function join(){ startRTC(); }
+// ---------- HOST ----------
+function host(){
+room=Math.random().toString(36).slice(2,7);
+document.getElementById("roomInput").value=room;
+connect(room);
+}
 
-function startRTC(){
-pc=new RTCPeerConnection({
-iceServers:[{urls:"stun:stun.l.google.com:19302"}]
-});
+// ---------- JOIN ----------
+function join(){
+room=document.getElementById("roomInput").value.trim();
+if(!room)return alert("Pon codigo");
+connect(room);
+}
 
-channel=pc.createDataChannel("game");
-
-channel.onmessage=e=>{ players=JSON.parse(e.data); };
-
-pc.ondatachannel=e=>{
-channel=e.channel;
-channel.onmessage=ev=>{ players=JSON.parse(ev.data); };
+// ---------- CONEXION ----------
+function connect(roomName){
+socket.onopen=()=>{
+socket.send(JSON.stringify({
+type:"join",
+room:roomName,
+id:myId
+}));
 };
 
-pc.onicecandidate=e=>{
-if(!e.candidate){
-roomCode=btoa(JSON.stringify(pc.localDescription));
-document.getElementById("roomCode").textContent=roomCode;
+socket.onmessage=msg=>{
+let data=JSON.parse(msg.data);
+
+if(data.type==="players"){
+players=data.players;
 }
 };
-
-if(isHost){
-pc.createOffer().then(o=>pc.setLocalDescription(o));
-}else{
-let code=prompt("Pega el código del host");
-let desc=new RTCSessionDescription(JSON.parse(atob(code)));
-pc.setRemoteDescription(desc)
-.then(()=>pc.createAnswer())
-.then(a=>pc.setLocalDescription(a));
-}
 
 startGame();
 }
@@ -113,19 +88,13 @@ let keys={};
 onkeydown=e=>keys[e.key]=true;
 onkeyup=e=>keys[e.key]=false;
 
-let me={
-x:1200,
-y:900,
-emoji:"🧑",
-name:""
-};
+let me={x:1200,y:900,emoji:"🧑",name:""};
 
-// 🌳 mundo grande
 const TILE=40;
 const MAP_W=120;
 const MAP_H=120;
-let world=[];
 
+let world=[];
 for(let y=0;y<MAP_H;y++){
 world[y]=[];
 for(let x=0;x<MAP_W;x++){
@@ -133,7 +102,6 @@ world[y][x]=Math.random()<0.07?"🌳":"";
 }
 }
 
-// 📷 cámara
 let cam={x:0,y:0};
 
 function startGame(){
@@ -142,70 +110,66 @@ me.name=document.getElementById("name").value||"Jugador";
 document.getElementById("menu").style.display="none";
 document.getElementById("hud").style.display="block";
 canvas.style.display="block";
+document.getElementById("roomLabel").textContent=room;
 
 loop();
 }
 
-// ---------- LOGICA ----------
+// ---------- UPDATE ----------
 function update(){
-
 let sp=4;
 if(keys["w"]) me.y-=sp;
 if(keys["s"]) me.y+=sp;
 if(keys["a"]) me.x-=sp;
 if(keys["d"]) me.x+=sp;
 
-// actualizar cámara
-cam.x = me.x - canvas.width/2;
-cam.y = me.y - canvas.height/2;
+cam.x=me.x-canvas.width/2;
+cam.y=me.y-canvas.height/2;
 
 players[myId]=me;
 
-if(channel && channel.readyState==="open"){
-channel.send(JSON.stringify(players));
-}
+if(socket.readyState===1){
+socket.send(JSON.stringify({
+type:"state",
+room:room,
+players:players
+}));
 }
 
-// ---------- DIBUJO ----------
+let list="";
+for(let id in players) list+=players[id].name+"<br>";
+document.getElementById("playersList").innerHTML=list;
+}
+
+// ---------- DRAW ----------
 function draw(){
 ctx.clearRect(0,0,canvas.width,canvas.height);
 
-// pasto
 ctx.fillStyle="#3cb043";
 ctx.fillRect(0,0,canvas.width,canvas.height);
 
-// árboles con cámara
 ctx.font="28px serif";
 for(let y=0;y<MAP_H;y++){
 for(let x=0;x<MAP_W;x++){
 let t=world[y][x];
 if(!t) continue;
-
-let px = x*TILE - cam.x;
-let py = y*TILE - cam.y;
-
-if(px<-TILE || py<-TILE || px>canvas.width || py>canvas.height) continue;
-
+let px=x*TILE-cam.x;
+let py=y*TILE-cam.y;
+if(px<-TILE||py<-TILE||px>canvas.width||py>canvas.height) continue;
 ctx.fillText(t,px,py+30);
 }
 }
 
-// jugadores
 ctx.textAlign="center";
-
 for(let id in players){
 let p=players[id];
-if(!p)continue;
-
 let px=p.x-cam.x;
 let py=p.y-cam.y;
 
-// nametag
 ctx.fillStyle="white";
 ctx.font="14px sans-serif";
 ctx.fillText(p.name,px,py-18);
 
-// emoji
 ctx.font="26px serif";
 ctx.fillText(p.emoji,px,py);
 }

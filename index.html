@@ -2,32 +2,36 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>RPG Block World P2P</title>
+    <title>RPG Ultra Smooth P2P</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #1a1a2e; font-family: 'Courier New', Courier, monospace; }
-        canvas { display: block; image-rendering: pixelated; }
-        #ui { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.8); color: #00ff41; padding: 15px; border-radius: 5px; border: 2px solid #00ff41; z-index: 10; }
-        input, button { background: #16213e; border: 1px solid #00ff41; color: white; padding: 5px; margin-top: 5px; }
-        #hud { position: absolute; bottom: 20px; left: 20px; color: white; text-shadow: 2px 2px black; font-size: 20px; pointer-events: none; }
+        body { margin: 0; overflow: hidden; background: #0f172a; font-family: 'Segoe UI', sans-serif; }
+        canvas { display: block; }
+        #ui { position: absolute; top: 20px; left: 20px; background: rgba(15, 23, 42, 0.9); color: #38bdf8; padding: 20px; border-radius: 12px; border: 1px solid #38bdf8; box-shadow: 0 0 20px rgba(0,0,0,0.5); z-index: 100; }
+        input { background: #1e293b; border: 1px solid #334155; color: white; padding: 8px; border-radius: 4px; width: 150px; }
+        button { background: #38bdf8; border: none; color: #0f172a; padding: 8px 15px; font-weight: bold; border-radius: 4px; cursor: pointer; transition: 0.3s; }
+        button:hover { background: #7dd3fc; }
+        #hud { position: absolute; bottom: 20px; left: 20px; color: white; pointer-events: none; }
     </style>
 </head>
 <body>
 
 <div id="ui">
     <div id="setup">
-        <label>Tu Nombre:</label><br>
-        <input type="text" id="playerName" placeholder="Escribe tu Nick..."><br>
-        <button onclick="startHost()">Ser HOST (Crear Mundo)</button><hr>
-        <input type="text" id="joinId" placeholder="ID del Host">
-        <button onclick="startJoin()">Unirse a Mundo</button>
+        <input type="text" id="playerName" placeholder="Tu Nick RPG">
+        <button onclick="startHost()">Crear Mundo</button>
+        <hr style="border: 0; border-top: 1px solid #334155; margin: 15px 0;">
+        <input type="text" id="joinId" placeholder="ID del Mundo">
+        <button onclick="startJoin()">Unirse</button>
     </div>
-    <p id="status">Estado: Configura tu personaje</p>
+    <p id="status">Esperando...</p>
 </div>
 
 <div id="hud">
-    <div id="stats">Nivel: 1 | XP: 0/100</div>
-    <div id="hp-bar" style="width: 200px; height: 10px; background: red; border: 2px solid white;"></div>
+    <div id="stats" style="font-size: 24px; font-weight: bold;">Nivel: 1 | XP: 0</div>
+    <div style="width: 250px; height: 12px; background: #334155; border-radius: 6px; overflow: hidden; margin-top: 5px;">
+        <div id="xp-bar" style="width: 0%; height: 100%; background: #38bdf8; transition: 0.3s;"></div>
+    </div>
 </div>
 
 <canvas id="game"></canvas>
@@ -35,150 +39,155 @@
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-const status = document.getElementById('status');
-const statsDiv = document.getElementById('stats');
-
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
 const TILE_SIZE = 40;
-let world = []; 
+let world = [];
 let players = {}; 
+let keys = {};
 let myId = null;
 let peer = null;
 let connections = [];
 
-// --- INICIALIZACIÓN DE JUGADOR ---
-let myData = {
-    name: "Invitado",
-    x: 200, y: 200,
+// Mi personaje con suavizado
+let me = {
+    id: null,
+    name: "Player",
+    x: 400, y: 300,
+    targetX: 400, targetY: 300, // Para suavizar a otros
     hp: 100, lvl: 1, xp: 0,
-    color: `hsl(${Math.random() * 360}, 70%, 50%)`
+    color: `hsl(${Math.random() * 360}, 70%, 60%)`
 };
 
-// Crear mundo procedural simple
-for(let x = 0; x < 100; x++) {
+// Generar Mapa
+for(let x=0; x<100; x++){
     world[x] = [];
-    for(let y = 0; y < 30; y++) {
-        world[x][y] = y > 12 ? (y === 13 ? 1 : 2) : 0; // 1: Cesped, 2: Piedra
-    }
+    for(let y=0; y<40; y++) world[x][y] = y > 15 ? (y === 16 ? 1 : 2) : 0;
 }
 
 function startHost() {
-    myData.name = document.getElementById('playerName').value || "Host";
+    me.name = document.getElementById('playerName').value || "Host";
     peer = new Peer();
     peer.on('open', id => {
-        myId = id;
-        status.innerText = "ID de Sala: " + id;
-        players[id] = myData;
-        initGame();
+        myId = id; me.id = id;
+        document.getElementById('status').innerText = "Comparte este ID: " + id;
+        players[id] = me;
+        init();
     });
     peer.on('connection', conn => {
         connections.push(conn);
         conn.on('data', data => handleData(data, conn.peer));
-        // Al conectar, le pasamos el mundo al nuevo
-        setTimeout(() => conn.send({ type: 'syncWorld', world: world }), 500);
+        // Enviar mundo y jugadores actuales al nuevo
+        setTimeout(() => conn.send({ type: 'init', world, players }), 500);
     });
 }
 
 function startJoin() {
     const hostId = document.getElementById('joinId').value;
-    myData.name = document.getElementById('playerName').value || "Jugador";
+    me.name = document.getElementById('playerName').value || "Viajero";
     peer = new Peer();
     peer.on('open', id => {
-        myId = id;
+        myId = id; me.id = id;
         const conn = peer.connect(hostId);
         connections.push(conn);
         conn.on('open', () => {
-            status.innerText = "Conectado al Host";
-            players[id] = myData;
-            initGame();
+            document.getElementById('status').innerText = "Conectado";
+            players[id] = me;
+            init();
         });
         conn.on('data', data => handleData(data, hostId));
     });
 }
 
 function handleData(data, senderId) {
-    if (data.type === 'update') players[senderId] = data.player;
-    if (data.type === 'syncWorld') world = data.world;
-    if (data.type === 'blockChange') world[data.x][data.y] = data.block;
+    if (data.type === 'init') { world = data.world; players = data.players; }
+    if (data.type === 'sync') {
+        if (!players[senderId]) players[senderId] = data.p;
+        // En lugar de saltar, guardamos la meta para interpolar
+        players[senderId].targetX = data.p.x;
+        players[senderId].targetY = data.p.y;
+        players[senderId].name = data.p.name;
+        players[senderId].lvl = data.p.lvl;
+    }
+    if (data.type === 'block') world[data.x][data.y] = data.b;
 }
 
-function broadcast(data) {
-    connections.forEach(conn => conn.send(data));
-}
-
-function initGame() {
-    document.getElementById('setup').style.display = 'none';
+function init() {
+    document.getElementById('ui').style.opacity = "0.3";
+    window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+    window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
     
-    // Controles RPG
-    window.addEventListener('keydown', e => {
-        const speed = 10;
-        if(e.key === 'w') myData.y -= speed;
-        if(e.key === 's') myData.y += speed;
-        if(e.key === 'a') myData.x -= speed;
-        if(e.key === 'd') myData.x += speed;
-        
-        broadcast({ type: 'update', player: myData });
-    });
+    // Enviar mi posición 30 veces por segundo (frecuencia de red)
+    setInterval(() => {
+        if(myId) connections.forEach(c => c.send({ type: 'sync', p: me }));
+    }, 33);
 
-    // Acción RPG: Construir da XP
+    // Click para bloques
     canvas.addEventListener('mousedown', e => {
         const gx = Math.floor(e.clientX / TILE_SIZE);
         const gy = Math.floor(e.clientY / TILE_SIZE);
-        const isDelete = e.button !== 0;
-        
-        world[gx][gy] = isDelete ? 0 : 2;
-        
-        // Ganar XP
-        myData.xp += 10;
-        if(myData.xp >= 100) {
-            myData.lvl++;
-            myData.xp = 0;
-            alert("¡SUBISTE DE NIVEL! Ahora eres Nivel " + myData.lvl);
-        }
-        updateHUD();
-        
-        broadcast({ type: 'blockChange', x: gx, y: gy, block: world[gx][gy] });
-        broadcast({ type: 'update', player: myData });
+        const b = e.button === 0 ? 2 : 0;
+        world[gx][gy] = b;
+        me.xp += 5;
+        if(me.xp >= 100) { me.lvl++; me.xp = 0; }
+        connections.forEach(c => c.send({ type: 'block', x: gx, y: gy, b: b }));
     });
 
-    requestAnimationFrame(gameLoop);
+    requestAnimationFrame(loop);
 }
 
-function updateHUD() {
-    statsDiv.innerText = `Nivel: ${myData.lvl} | XP: ${myData.xp}/100 | Nombre: ${myData.name}`;
-}
-
-function gameLoop() {
+function loop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // 1. Moverme a mí (Local)
+    const speed = 6;
+    if (keys['w'] || keys['arrowup']) me.y -= speed;
+    if (keys['s'] || keys['arrowdown']) me.y += speed;
+    if (keys['a'] || keys['arrowleft']) me.x -= speed;
+    if (keys['d'] || keys['arrowright']) me.x += speed;
 
-    // Dibujar Mundo
-    for(let x = 0; x < world.length; x++) {
-        for(let y = 0; y < world[x].length; y++) {
+    // 2. Dibujar Mundo
+    for(let x=0; x<canvas.width/TILE_SIZE + 1; x++){
+        for(let y=0; y<canvas.height/TILE_SIZE + 1; y++){
             if(!world[x][y]) continue;
-            ctx.fillStyle = world[x][y] === 1 ? '#2d6a4f' : '#4a4e69';
-            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE - 1, TILE_SIZE - 1);
+            ctx.fillStyle = world[x][y] === 1 ? "#22c55e" : "#475569";
+            ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
         }
     }
 
-    // Dibujar Jugadores y Nametags
-    for(let id in players) {
-        const p = players[id];
+    // 3. Dibujar y Suavizar Jugadores
+    for (let id in players) {
+        let p = players[id];
         
-        // El "Steve"
-        ctx.fillStyle = p.color;
-        ctx.fillRect(p.x, p.y, 30, 50);
+        if (id !== myId) {
+            // INTERPOLACIÓN: Se mueve un 15% hacia el objetivo cada frame
+            p.x += (p.targetX - p.x) * 0.15;
+            p.y += (p.targetY - p.y) * 0.15;
+        }
 
-        // Nametag (Nombre + Nivel)
+        // Cuerpo
+        ctx.fillStyle = p.color;
+        ctx.shadowBlur = 10; ctx.shadowColor = p.color;
+        ctx.fillRect(p.x, p.y, 30, 50);
+        ctx.shadowBlur = 0;
+
+        // Nametag RPG
         ctx.fillStyle = "white";
-        ctx.font = "bold 14px Arial";
+        ctx.font = "bold 14px 'Segoe UI'";
         ctx.textAlign = "center";
-        const tag = `[Lvl ${p.lvl}] ${p.name}`;
-        ctx.fillText(tag, p.x + 15, p.y - 10);
+        ctx.fillText(`Lv.${p.lvl} ${p.name}`, p.x + 15, p.y - 15);
+        
+        // Barra de vida pequeña sobre la cabeza
+        ctx.fillStyle = "#ef4444";
+        ctx.fillRect(p.x, p.y - 8, 30, 4);
     }
 
-    requestAnimationFrame(gameLoop);
+    // Actualizar HUD
+    document.getElementById('stats').innerText = `Nivel: ${me.lvl} | XP: ${me.xp}`;
+    document.getElementById('xp-bar').style.width = me.xp + "%";
+
+    requestAnimationFrame(loop);
 }
 </script>
 </body>

@@ -2,33 +2,36 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>RPG P2P - Fix Visibilidad</title>
+    <title>RPG Minecraft 2D - Pro</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #0f172a; font-family: sans-serif; }
-        canvas { display: block; background: #87CEEB; }
-        #ui { position: absolute; top: 10px; left: 10px; background: rgba(15, 23, 42, 0.9); color: #38bdf8; padding: 15px; border-radius: 8px; border: 1px solid #38bdf8; z-index: 100; }
-        #chat-box { position: absolute; bottom: 10px; right: 10px; width: 250px; background: rgba(0,0,0,0.6); color: white; padding: 10px; border-radius: 5px; }
-        #messages { height: 150px; overflow-y: auto; font-size: 12px; margin-bottom: 5px; }
-        input { background: #1e293b; border: 1px solid #334155; color: white; padding: 5px; border-radius: 4px; width: 80%; }
-        button { background: #38bdf8; border: none; padding: 5px; font-weight: bold; cursor: pointer; }
+        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Segoe UI', sans-serif; }
+        canvas { display: block; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        .panel { position: absolute; background: rgba(15, 23, 42, 0.9); color: white; padding: 15px; border-radius: 8px; pointer-events: auto; border: 2px solid #38bdf8; }
+        #setup { top: 20px; left: 20px; }
+        #inventory { bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; }
+        .slot { width: 50px; height: 50px; border: 2px solid #64748b; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; font-weight: bold; }
+        .slot.active { border-color: #38bdf8; background: rgba(56, 189, 248, 0.2); }
+        input { background: #1e293b; border: 1px solid #334155; color: white; padding: 5px; }
     </style>
 </head>
 <body>
 
-<div id="ui">
-    <div id="setup">
-        <input type="text" id="playerName" placeholder="Nick">
-        <button onclick="startHost()">HOST</button>
+<div id="ui-layer">
+    <div id="setup" class="panel">
+        <input type="text" id="playerName" placeholder="Nombre">
+        <button onclick="startHost()">Crear Mundo</button>
         <input type="text" id="joinId" placeholder="ID Host">
-        <button onclick="startJoin()">UNIRSE</button>
+        <button onclick="startJoin()">Unirse</button>
+        <div id="status">Esperando...</div>
     </div>
-    <p id="status" style="font-size: 12px; margin: 5px 0;">Configura tu personaje...</p>
-</div>
 
-<div id="chat-box" style="display:none;">
-    <div id="messages"></div>
-    <input type="text" id="chatInput" placeholder="Presiona Enter para hablar">
+    <div id="inventory">
+        <div class="slot active" id="slot1">1<br>👊</div>
+        <div class="slot" id="slot2">2<br>⚔️</div>
+        <div class="slot" id="slot3">3<br>🧱</div>
+    </div>
 </div>
 
 <canvas id="game"></canvas>
@@ -39,40 +42,63 @@ const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
+// --- CONFIGURACIÓN ---
+const TILE_SIZE = 40;
+const WORLD_WIDTH = 200; // Bloques de ancho
+const WORLD_HEIGHT = 60;  // Bloques de alto
 let world = [];
-let players = {}; 
+let players = {};
 let connections = {};
 let myId = null;
 let isHost = false;
+let selectedSlot = 1;
 
+// Cámara
+let camera = { x: 0, y: 0 };
+
+// Mi Jugador
 let me = {
-    x: 100, y: 100,
-    targetX: 100, targetY: 100,
-    name: "User",
-    color: `hsl(${Math.random() * 360}, 70%, 60%)`,
-    lvl: 1
+    x: 1000, y: 500, targetX: 1000, targetY: 500,
+    name: "User", color: `hsl(${Math.random() * 360}, 70%, 60%)`,
+    hp: 100, item: 1, attacking: 0
 };
 
-// Generar Mundo
-for(let x=0; x<100; x++){
-    world[x] = [];
-    for(let y=0; y<30; y++) world[x][y] = y > 15 ? 2 : 0;
+// --- GENERACIÓN DE MUNDO ---
+function generateWorld() {
+    for(let x=0; x<WORLD_WIDTH; x++) {
+        world[x] = [];
+        for(let y=0; y<WORLD_HEIGHT; y++) {
+            let type = 0; // Aire
+            if(y > 20) type = 2; // Tierra/Piedra
+            if(y === 20) type = 1; // Pasto
+            
+            // Generar Árboles (Raro)
+            if(y === 19 && Math.random() < 0.1 && x > 5) {
+                type = 3; // Tronco
+                world[x][y-1] = 4; // Hojas
+            }
+            // Generar Rocas
+            if(y === 19 && Math.random() < 0.05) type = 5; 
+
+            if(!world[x][y]) world[x][y] = type;
+        }
+    }
 }
 
+// --- RED ---
 function startHost() {
     isHost = true;
+    generateWorld();
     me.name = document.getElementById('playerName').value || "Host";
     const peer = new Peer();
-    peer.on('open', id => {
-        myId = id;
-        players[id] = me;
-        document.getElementById('status').innerText = "Tu ID: " + id;
-        init();
+    peer.on('open', id => { 
+        myId = id; players[id] = me; 
+        document.getElementById('status').innerText = "ID: " + id; 
+        init(); 
     });
     peer.on('connection', conn => {
         conn.on('open', () => {
             connections[conn.peer] = conn;
-            // Enviamos el estado inicial al nuevo
             conn.send({ type: 'init', world, players });
         });
         conn.on('data', data => handleData(data, conn.peer));
@@ -80,17 +106,14 @@ function startHost() {
 }
 
 function startJoin() {
-    isHost = false;
     const hostId = document.getElementById('joinId').value;
     me.name = document.getElementById('playerName').value || "Player";
     const peer = new Peer();
     peer.on('open', id => {
-        myId = id;
-        players[id] = me;
+        myId = id; players[id] = me;
         const conn = peer.connect(hostId);
         conn.on('open', () => {
             connections[hostId] = conn;
-            // Avisamos al host que entramos
             conn.send({ type: 'join', p: me });
             init();
         });
@@ -99,103 +122,123 @@ function startJoin() {
 }
 
 function handleData(data, senderId) {
-    if (data.type === 'init') {
-        world = data.world;
-        players = data.players;
-    }
-    if (data.type === 'join') {
-        players[senderId] = data.p; // El host registra al invitado
-        if(isHost) broadcast({ type: 'new_player', id: senderId, p: data.p });
-    }
-    if (data.type === 'new_player') {
-        players[data.id] = data.p; // Los invitados registran a otros invitados
-    }
+    if (data.type === 'init') { world = data.world; players = data.players; }
+    if (data.type === 'join') { players[senderId] = data.p; if(isHost) broadcast({type:'new', id:senderId, p:data.p}); }
+    if (data.type === 'new') { players[data.id] = data.p; }
     if (data.type === 'sync') {
         if(!players[senderId]) return;
         players[senderId].targetX = data.x;
         players[senderId].targetY = data.y;
-        if(isHost) broadcast({ type: 'sync', x: data.x, y: data.y }, senderId);
-    }
-    if (data.type === 'chat') {
-        addChatMessage(data.name, data.msg);
-    }
-}
-
-function broadcast(data, excludeId = null) {
-    for (let id in connections) {
-        if (id !== excludeId) connections[id].send(data);
+        players[senderId].attacking = data.atk;
+        players[senderId].item = data.item;
+        if(isHost) broadcast(data, senderId);
     }
 }
 
+function broadcast(data, skipId = null) {
+    for(let id in connections) if(id !== skipId) connections[id].send(data);
+}
+
+// --- LOOP PRINCIPAL ---
+let keys = {};
 function init() {
     document.getElementById('setup').style.display = 'none';
-    document.getElementById('chat-box').style.display = 'block';
-    
-    // Controles
     window.addEventListener('keydown', e => {
-        if(document.activeElement === document.getElementById('chatInput')) return;
-        if(e.key === 'w') me.y -= 10;
-        if(e.key === 's') me.y += 10;
-        if(e.key === 'a') me.x -= 10;
-        if(e.key === 'd') me.x += 10;
-        
-        const syncData = { type: 'sync', x: me.x, y: me.y };
-        if(isHost) broadcast(syncData);
-        else connections[Object.keys(connections)[0]].send(syncData);
-    });
-
-    // Chat
-    document.getElementById('chatInput').addEventListener('keypress', e => {
-        if(e.key === 'Enter') {
-            const msg = e.target.value;
-            if(!msg) return;
-            const chatData = { type: 'chat', name: me.name, msg: msg };
-            addChatMessage(me.name, msg);
-            if(isHost) broadcast(chatData);
-            else connections[Object.keys(connections)[0]].send(chatData);
-            e.target.value = '';
+        keys[e.key.toLowerCase()] = true;
+        if(['1','2','3'].includes(e.key)) {
+            selectedSlot = e.key;
+            me.item = parseInt(e.key);
+            updateUI();
         }
+    });
+    window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+    
+    canvas.addEventListener('mousedown', () => {
+        me.attacking = 15; // Frames de animación
     });
 
     requestAnimationFrame(loop);
 }
 
-function addChatMessage(name, msg) {
-    const div = document.getElementById('messages');
-    div.innerHTML += `<div><b>${name}:</b> ${msg}</div>`;
-    div.scrollTop = div.scrollHeight;
+function updateUI() {
+    document.querySelectorAll('.slot').forEach(s => s.classList.remove('active'));
+    document.getElementById('slot' + selectedSlot).classList.add('active');
 }
 
 function loop() {
+    // 1. Lógica de Movimiento Fluido
+    const speed = 7;
+    if(keys['a']) me.x -= speed;
+    if(keys['d']) me.x += speed;
+    if(keys['w']) me.y -= speed;
+    if(keys['s']) me.y += speed;
+
+    // 2. Cámara sigue al jugador
+    camera.x = me.x - canvas.width/2;
+    camera.y = me.y - canvas.height/2;
+
+    // 3. Renderizado
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.translate(-camera.x, -camera.y);
+
+    // Dibujar Mundo (Optimizado: Solo lo que se ve)
+    let startX = Math.max(0, Math.floor(camera.x / TILE_SIZE));
+    let endX = Math.min(WORLD_WIDTH, startX + Math.ceil(canvas.width / TILE_SIZE) + 1);
     
-    // Dibujar Mundo
-    ctx.fillStyle = "#22c55e";
-    for(let x=0; x<world.length; x++){
-        for(let y=0; y<world[x].length; y++){
-            if(world[x][y] === 2) ctx.fillRect(x*32, y*32, 32, 32);
+    for(let x=startX; x<endX; x++) {
+        for(let y=0; y<WORLD_HEIGHT; y++) {
+            let t = world[x][y];
+            if(!t) continue;
+            if(t === 1) ctx.fillStyle = '#22c55e'; // Pasto
+            if(t === 2) ctx.fillStyle = '#78350f'; // Tierra
+            if(t === 3) ctx.fillStyle = '#451a03'; // Tronco
+            if(t === 4) ctx.fillStyle = '#15803d'; // Hojas
+            if(t === 5) ctx.fillStyle = '#64748b'; // Roca
+            ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
         }
     }
 
     // Dibujar Jugadores
-    for (let id in players) {
+    for(let id in players) {
         let p = players[id];
-        // Suavizado
-        if (id !== myId) {
+        if(id !== myId) {
             p.x += (p.targetX - p.x) * 0.2;
             p.y += (p.targetY - p.y) * 0.2;
         } else {
             p.x = me.x; p.y = me.y;
+            // Enviar datos
+            if(frameCount % 2 === 0) broadcast({type:'sync', x:me.x, y:me.y, atk:me.attacking, item:me.item});
         }
 
+        // Cuerpo
         ctx.fillStyle = p.color;
-        ctx.fillRect(p.x, p.y, 30, 45);
-        ctx.fillStyle = "black";
+        ctx.fillRect(p.x, p.y, 30, 50);
+        
+        // Arma/Herramienta
+        if(p.item === 2) { // Espada
+            ctx.fillStyle = '#cbd5e1';
+            let rot = p.attacking > 0 ? 0.8 : 0;
+            ctx.save();
+            ctx.translate(p.x + 30, p.y + 25);
+            ctx.rotate(rot);
+            ctx.fillRect(0, -5, 30, 10);
+            ctx.restore();
+        }
+
+        ctx.fillStyle = "white";
         ctx.textAlign = "center";
-        ctx.fillText(p.name, p.x + 15, p.y - 5);
+        ctx.fillText(p.name, p.x + 15, p.y - 10);
+        
+        if(p.attacking > 0) p.attacking--;
     }
+
+    ctx.restore();
+    frameCount++;
     requestAnimationFrame(loop);
 }
+
+let frameCount = 0;
 </script>
 </body>
 </html>

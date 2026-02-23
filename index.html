@@ -2,36 +2,26 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>RPG Ultra Smooth P2P</title>
+    <title>RPG P2P Fix - Sincronizado</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #0f172a; font-family: 'Segoe UI', sans-serif; }
+        body { margin: 0; overflow: hidden; background: #0f172a; font-family: sans-serif; }
         canvas { display: block; }
-        #ui { position: absolute; top: 20px; left: 20px; background: rgba(15, 23, 42, 0.9); color: #38bdf8; padding: 20px; border-radius: 12px; border: 1px solid #38bdf8; box-shadow: 0 0 20px rgba(0,0,0,0.5); z-index: 100; }
-        input { background: #1e293b; border: 1px solid #334155; color: white; padding: 8px; border-radius: 4px; width: 150px; }
-        button { background: #38bdf8; border: none; color: #0f172a; padding: 8px 15px; font-weight: bold; border-radius: 4px; cursor: pointer; transition: 0.3s; }
-        button:hover { background: #7dd3fc; }
-        #hud { position: absolute; bottom: 20px; left: 20px; color: white; pointer-events: none; }
+        #ui { position: absolute; top: 20px; left: 20px; background: rgba(15, 23, 42, 0.9); color: #38bdf8; padding: 20px; border-radius: 12px; border: 1px solid #38bdf8; z-index: 100; }
+        input { background: #1e293b; border: 1px solid #334155; color: white; padding: 8px; border-radius: 4px; width: 140px; }
+        button { background: #38bdf8; border: none; padding: 8px; font-weight: bold; cursor: pointer; border-radius: 4px; }
     </style>
 </head>
 <body>
 
 <div id="ui">
     <div id="setup">
-        <input type="text" id="playerName" placeholder="Tu Nick RPG">
-        <button onclick="startHost()">Crear Mundo</button>
-        <hr style="border: 0; border-top: 1px solid #334155; margin: 15px 0;">
-        <input type="text" id="joinId" placeholder="ID del Mundo">
+        <input type="text" id="playerName" placeholder="Tu Nick">
+        <button onclick="startHost()">Crear Mundo</button><br><br>
+        <input type="text" id="joinId" placeholder="ID del Host">
         <button onclick="startJoin()">Unirse</button>
     </div>
-    <p id="status">Esperando...</p>
-</div>
-
-<div id="hud">
-    <div id="stats" style="font-size: 24px; font-weight: bold;">Nivel: 1 | XP: 0</div>
-    <div style="width: 250px; height: 12px; background: #334155; border-radius: 6px; overflow: hidden; margin-top: 5px;">
-        <div id="xp-bar" style="width: 0%; height: 100%; background: #38bdf8; transition: 0.3s;"></div>
-    </div>
+    <p id="status">Estado: Esperando...</p>
 </div>
 
 <canvas id="game"></canvas>
@@ -48,51 +38,54 @@ let players = {};
 let keys = {};
 let myId = null;
 let peer = null;
-let connections = [];
+let connections = {}; // Usamos un objeto para mapear IDs a conexiones
+let isHost = false;
 
-// Mi personaje con suavizado
 let me = {
-    id: null,
-    name: "Player",
     x: 400, y: 300,
-    targetX: 400, targetY: 300, // Para suavizar a otros
-    hp: 100, lvl: 1, xp: 0,
+    name: "Jugador",
+    lvl: 1, xp: 0,
     color: `hsl(${Math.random() * 360}, 70%, 60%)`
 };
 
-// Generar Mapa
+// Generar Mapa Simple
 for(let x=0; x<100; x++){
     world[x] = [];
     for(let y=0; y<40; y++) world[x][y] = y > 15 ? (y === 16 ? 1 : 2) : 0;
 }
 
 function startHost() {
+    isHost = true;
     me.name = document.getElementById('playerName').value || "Host";
     peer = new Peer();
     peer.on('open', id => {
-        myId = id; me.id = id;
-        document.getElementById('status').innerText = "Comparte este ID: " + id;
+        myId = id;
+        document.getElementById('status').innerText = "ID: " + id;
         players[id] = me;
         init();
     });
+
     peer.on('connection', conn => {
-        connections.push(conn);
+        conn.on('open', () => {
+            connections[conn.peer] = conn;
+            // Al conectarse alguien, el host le manda el mundo y los jugadores actuales
+            conn.send({ type: 'init', world, players });
+        });
         conn.on('data', data => handleData(data, conn.peer));
-        // Enviar mundo y jugadores actuales al nuevo
-        setTimeout(() => conn.send({ type: 'init', world, players }), 500);
     });
 }
 
 function startJoin() {
+    isHost = false;
     const hostId = document.getElementById('joinId').value;
-    me.name = document.getElementById('playerName').value || "Viajero";
+    me.name = document.getElementById('playerName').value || "Invitado";
     peer = new Peer();
     peer.on('open', id => {
-        myId = id; me.id = id;
+        myId = id;
         const conn = peer.connect(hostId);
-        connections.push(conn);
+        connections[hostId] = conn;
         conn.on('open', () => {
-            document.getElementById('status').innerText = "Conectado";
+            document.getElementById('status').innerText = "Conectado al Host";
             players[id] = me;
             init();
         });
@@ -101,38 +94,51 @@ function startJoin() {
 }
 
 function handleData(data, senderId) {
-    if (data.type === 'init') { world = data.world; players = data.players; }
+    if (data.type === 'init') {
+        world = data.world;
+        players = data.players;
+    }
+    
     if (data.type === 'sync') {
+        // Actualizamos o creamos al jugador que envió la data
         if (!players[senderId]) players[senderId] = data.p;
-        // En lugar de saltar, guardamos la meta para interpolar
         players[senderId].targetX = data.p.x;
         players[senderId].targetY = data.p.y;
         players[senderId].name = data.p.name;
         players[senderId].lvl = data.p.lvl;
+
+        // ¡ESTA ES LA CLAVE! Si soy el Host, reenvío esta info a todos los demás
+        if (isHost) {
+            for (let id in connections) {
+                if (id !== senderId) { // No se lo devuelvas al que lo envió
+                    connections[id].send({ type: 'sync_relay', id: senderId, p: data.p });
+                }
+            }
+        }
     }
-    if (data.type === 'block') world[data.x][data.y] = data.b;
+
+    if (data.type === 'sync_relay') {
+        // El invitado recibe la info de otros invitados a través del host
+        if (!players[data.id]) players[data.id] = data.p;
+        players[data.id].targetX = data.p.x;
+        players[data.id].targetY = data.p.y;
+    }
 }
 
 function init() {
-    document.getElementById('ui').style.opacity = "0.3";
+    document.getElementById('setup').style.display = "none";
     window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
     window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
     
-    // Enviar mi posición 30 veces por segundo (frecuencia de red)
+    // El Invitado solo le manda al Host. El Host le manda a todos.
     setInterval(() => {
-        if(myId) connections.forEach(c => c.send({ type: 'sync', p: me }));
-    }, 33);
-
-    // Click para bloques
-    canvas.addEventListener('mousedown', e => {
-        const gx = Math.floor(e.clientX / TILE_SIZE);
-        const gy = Math.floor(e.clientY / TILE_SIZE);
-        const b = e.button === 0 ? 2 : 0;
-        world[gx][gy] = b;
-        me.xp += 5;
-        if(me.xp >= 100) { me.lvl++; me.xp = 0; }
-        connections.forEach(c => c.send({ type: 'block', x: gx, y: gy, b: b }));
-    });
+        if(myId) {
+            const dataToSend = { type: 'sync', p: me };
+            for (let id in connections) {
+                connections[id].send(dataToSend);
+            }
+        }
+    }, 30);
 
     requestAnimationFrame(loop);
 }
@@ -140,52 +146,37 @@ function init() {
 function loop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // 1. Moverme a mí (Local)
-    const speed = 6;
-    if (keys['w'] || keys['arrowup']) me.y -= speed;
-    if (keys['s'] || keys['arrowdown']) me.y += speed;
-    if (keys['a'] || keys['arrowleft']) me.x -= speed;
-    if (keys['d'] || keys['arrowright']) me.x += speed;
+    // Movimiento Local
+    const speed = 5;
+    if (keys['w']) me.y -= speed;
+    if (keys['s']) me.y += speed;
+    if (keys['a']) me.x -= speed;
+    if (keys['d']) me.x += speed;
 
-    // 2. Dibujar Mundo
+    // Dibujar Mundo
     for(let x=0; x<canvas.width/TILE_SIZE + 1; x++){
         for(let y=0; y<canvas.height/TILE_SIZE + 1; y++){
-            if(!world[x][y]) continue;
+            if(!world[x] || !world[x][y]) continue;
             ctx.fillStyle = world[x][y] === 1 ? "#22c55e" : "#475569";
             ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
         }
     }
 
-    // 3. Dibujar y Suavizar Jugadores
+    // Dibujar Jugadores con Suavizado
     for (let id in players) {
         let p = players[id];
-        
-        if (id !== myId) {
-            // INTERPOLACIÓN: Se mueve un 15% hacia el objetivo cada frame
-            p.x += (p.targetX - p.x) * 0.15;
-            p.y += (p.targetY - p.y) * 0.15;
+        if (id !== myId && p.targetX !== undefined) {
+            p.x += (p.targetX - p.x) * 0.2;
+            p.y += (p.targetY - p.y) * 0.2;
         }
 
-        // Cuerpo
-        ctx.fillStyle = p.color;
-        ctx.shadowBlur = 10; ctx.shadowColor = p.color;
+        ctx.fillStyle = p.color || 'white';
         ctx.fillRect(p.x, p.y, 30, 50);
-        ctx.shadowBlur = 0;
-
-        // Nametag RPG
-        ctx.fillStyle = "white";
-        ctx.font = "bold 14px 'Segoe UI'";
-        ctx.textAlign = "center";
-        ctx.fillText(`Lv.${p.lvl} ${p.name}`, p.x + 15, p.y - 15);
         
-        // Barra de vida pequeña sobre la cabeza
-        ctx.fillStyle = "#ef4444";
-        ctx.fillRect(p.x, p.y - 8, 30, 4);
+        ctx.fillStyle = "white";
+        ctx.textAlign = "center";
+        ctx.fillText(`${p.name} (Lv.${p.lvl || 1})`, p.x + 15, p.y - 10);
     }
-
-    // Actualizar HUD
-    document.getElementById('stats').innerText = `Nivel: ${me.lvl} | XP: ${me.xp}`;
-    document.getElementById('xp-bar').style.width = me.xp + "%";
 
     requestAnimationFrame(loop);
 }

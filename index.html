@@ -2,281 +2,227 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Mega RPG P2P - Ultimate Edition</title>
+    <title>RPG - Fixed & Stable</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #1a2e1a; font-family: 'Segoe UI', sans-serif; display: flex; }
-        #game-container { position: relative; flex-grow: 1; height: 100vh; overflow: hidden; }
+        body { margin: 0; overflow: hidden; background: #1a2e1a; font-family: sans-serif; display: flex; }
+        #game-container { position: relative; flex-grow: 1; height: 100vh; }
         canvas { display: block; background: #3e7c37; }
-        
-        /* UI Laterales y Superiores */
-        #server-panel { width: 280px; background: #0f172a; color: white; padding: 20px; border-left: 4px solid #38bdf8; z-index: 100; box-shadow: -5px 0 15px rgba(0,0,0,0.5); }
-        .code-box { background: #1e293b; padding: 10px; border-radius: 5px; color: #38bdf8; font-family: monospace; font-size: 11px; margin: 10px 0; border: 1px solid #334155; }
-        
-        #hud { position: absolute; top: 20px; left: 20px; color: white; pointer-events: none; z-index: 50; }
-        #hp-bar-container { width: 200px; height: 20px; background: #334155; border: 2px solid white; border-radius: 10px; overflow: hidden; }
-        #hp-fill { width: 100%; height: 100%; background: #ef4444; transition: 0.3s; }
-
-        #hotbar { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 12px; pointer-events: auto; }
-        .slot { width: 50px; height: 50px; border: 2px solid #475569; border-radius: 8px; display: flex; justify-content: center; align-items: center; color: white; font-size: 24px; cursor: pointer; position: relative; transition: 0.2s; }
-        .slot.active { border-color: #38bdf8; background: rgba(56, 189, 248, 0.2); transform: scale(1.1); }
-        .slot-key { position: absolute; top: 2px; left: 5px; font-size: 10px; color: #94a3b8; }
-
-        /* Menú Inicial */
-        .menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1e293b; padding: 40px; border-radius: 20px; text-align: center; color: white; border: 3px solid #38bdf8; z-index: 1000; box-shadow: 0 0 50px rgba(0,0,0,1); }
-        input { padding: 12px; border-radius: 8px; border: none; margin: 10px; width: 250px; font-size: 16px; }
-        button { background: #38bdf8; border: none; padding: 12px 25px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.3s; }
-        button:hover { background: #7dd3fc; transform: translateY(-2px); }
-
-        #damage-overlay { position: absolute; top:0; left:0; width:100%; height:100%; background: red; opacity: 0; pointer-events: none; transition: opacity 0.1s; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        .panel { position: absolute; background: rgba(15,23,42,0.9); color: white; padding: 20px; border-radius: 10px; pointer-events: auto; border: 2px solid #38bdf8; }
+        #setup { top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; z-index: 1000; }
+        #death-screen { display: none; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; background: rgba(127, 29, 29, 0.95); border-color: #ef4444; z-index: 2000; }
+        #server-info { top: 20px; right: 20px; width: 220px; font-size: 12px; }
+        #hotbar { bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; background: rgba(0,0,0,0.6); padding: 8px; border-radius: 8px; }
+        .slot { width: 45px; height: 45px; border: 2px solid #475569; display: flex; justify-content: center; align-items: center; cursor: pointer; font-size: 20px; }
+        .slot.active { border-color: #38bdf8; background: rgba(56, 189, 248, 0.2); }
+        .hp-bar { width: 150px; height: 15px; background: #334155; border: 1px solid white; margin-top: 5px; }
+        #hp-fill { width: 100%; height: 100%; background: #ef4444; }
     </style>
 </head>
 <body>
 
 <div id="game-container">
     <canvas id="game"></canvas>
-    <div id="damage-overlay"></div>
     
-    <div id="hud">
-        <div id="player-tag" style="font-weight: bold; font-size: 18px; margin-bottom: 5px;">Héroe</div>
-        <div id="hp-bar-container"><div id="hp-fill"></div></div>
-    </div>
+    <div id="ui-layer">
+        <div id="setup" class="panel">
+            <h2>RPG MULTIJUGADOR</h2>
+            <input type="text" id="playerName" placeholder="Tu Nombre" style="padding:8px; width:80%;"><br><br>
+            <button onclick="startHost()">HOSTEAR (Crear)</button><br><br>
+            <input type="text" id="joinId" placeholder="ID del Servidor" style="padding:8px; width:80%;"><br><br>
+            <button onclick="startJoin()" style="background:#64748b;">UNIRSE</button>
+        </div>
 
-    <div id="setup" class="menu">
-        <h1>⚔️ SLIME RPG ONLINE 🛡️</h1>
-        <input type="text" id="playerName" placeholder="Tu nombre de guerrero...">
-        <br>
-        <button onclick="startHost()">CREAR NUEVO MUNDO</button>
-        <div style="margin: 20px; opacity: 0.5;">— O —</div>
-        <input type="text" id="joinId" placeholder="Pegar ID del Host aquí">
-        <br>
-        <button onclick="startJoin()" style="background: #64748b;">UNIRSE A MUNDO</button>
-        <p id="status" style="margin-top: 15px; color: #38bdf8;">Esperando acción...</p>
-    </div>
+        <div id="death-screen" class="panel">
+            <h1 style="color:#f87171;">HAS MUERTO</h1>
+            <button onclick="respawn()">REAPARECER</button>
+        </div>
 
-    <div id="hotbar" style="display:none;">
-        <div class="slot active" id="s1" onclick="setSlot(1)"><span class="slot-key">1</span>👊</div>
-        <div class="slot" id="s2" onclick="setSlot(2)"><span class="slot-key">2</span>⚔️</div>
-        <div class="slot" id="s3" onclick="setSlot(3)"><span class="slot-key">3</span>🧱</div>
-    </div>
-</div>
+        <div id="server-info" class="panel">
+            <strong>ID Server:</strong><br>
+            <code id="display-id" style="color:#38bdf8;">Esperando...</code><br><br>
+            <strong>Jugadores:</strong>
+            <div id="player-list"></div>
+        </div>
 
-<div id="server-panel">
-    <h3>📡 CONEXIÓN</h3>
-    <p style="font-size: 12px; color: #94a3b8;">ID del Servidor (Copia esto):</p>
-    <div id="id-display" class="code-box">No generado</div>
-    <hr style="border:0; border-top: 1px solid #334155; margin: 20px 0;">
-    <h4>👥 JUGADORES</h4>
-    <div id="player-list"></div>
+        <div id="hotbar" class="panel">
+            <div class="slot active" id="s1" onclick="setSlot(1)">👊</div>
+            <div class="slot" id="s2" onclick="setSlot(2)">⚔️</div>
+            <div class="slot" id="s3" onclick="setSlot(3)">🧱</div>
+            <div class="hp-bar"><div id="hp-fill"></div></div>
+        </div>
+    </div>
 </div>
 
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-canvas.width = window.innerWidth - 280;
+canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-const TILE_SIZE = 64;
-const WORLD_SIZE = 50;
-let world = [], players = {}, slimes = [], connections = {}, myId = null, isHost = false, selectedSlot = 1;
+let world = [], players = {}, slimes = [], connections = {}, peer = null;
+let myId = null, isHost = false, selectedSlot = 1, isDead = false;
 let camera = { x: 0, y: 0 }, keys = {};
-let me = { x: 1000, y: 1000, targetX: 1000, targetY: 1000, name: "Guerrero", color: `hsl(${Math.random()*360}, 70%, 50%)`, item: 1, hp: 100 };
+let me = { x: 1000, y: 1000, targetX: 1000, targetY: 1000, name: "Héroe", color: "cyan", item: 1, hp: 100 };
 
-// --- GENERACIÓN DE MUNDO ---
-function generateWorld() {
-    for(let x=0; x<WORLD_SIZE; x++) {
-        world[x] = [];
-        for(let y=0; y<WORLD_SIZE; y++) {
-            let r = Math.random();
-            world[x][y] = (r < 0.06) ? 1 : (r < 0.09 ? 2 : 0); // 1: Arbol, 2: Roca
-        }
-    }
-    for(let i=0; i<12; i++) spawnSlime();
-}
-
-function spawnSlime() {
-    slimes.push({
-        id: Math.random(),
-        x: Math.random() * (WORLD_SIZE * TILE_SIZE),
-        y: Math.random() * (WORLD_SIZE * TILE_SIZE),
-        hp: 30, speed: 1.5 + Math.random()
-    });
-}
-
-// --- RED (RELAY CORREGIDO) ---
-function handleData(data, senderId) {
-    if (data.type === 'init') { world = data.world; players = data.players; slimes = data.slimes; }
-    if (data.type === 'join') { 
-        players[senderId] = data.p; 
-        if(isHost) broadcast({ type: 'new', id: senderId, p: data.p }); 
-        updateUI();
-    }
-    if (data.type === 'new') { players[data.id] = data.p; updateUI(); }
-    if (data.type === 'sync') {
-        if(!players[senderId]) return;
-        players[senderId].targetX = data.x; players[senderId].targetY = data.y;
-        players[senderId].item = data.item; players[senderId].hp = data.hp;
-        if(isHost) {
-            slimes = data.slimes || slimes;
-            broadcast(data, senderId); // RELEVO PARA QUE TODOS SE VEAN
-        }
-    }
-    if (data.type === 'hit') { if(data.targetId === myId) takeDamage(15); }
-    if (data.type === 'build') { world[data.x][data.y] = data.v; if(isHost) broadcast(data, senderId); }
-    if (data.type === 'slime_death') { slimes = slimes.filter(s => s.id !== data.slimeId); }
-}
-
-function broadcast(data, skip = null) {
-    for(let id in connections) if(id !== skip) connections[id].send(data);
-}
-
-// --- ACCIONES ---
-function setSlot(n) {
-    selectedSlot = n; me.item = n;
-    document.querySelectorAll('.slot').forEach(s => s.classList.remove('active'));
-    document.getElementById('s'+n).classList.add('active');
-}
-
-function takeDamage(amt) {
-    me.hp -= amt;
-    document.getElementById('hp-fill').style.width = me.hp + "%";
-    document.getElementById('damage-overlay').style.opacity = 0.4;
-    setTimeout(() => document.getElementById('damage-overlay').style.opacity = 0, 100);
-    if(me.hp <= 0) { alert("¡Has caído en batalla!"); location.reload(); }
-}
-
-function interact() {
-    const worldX = Math.floor((me.x + 15) / TILE_SIZE);
-    const worldY = Math.floor((me.y + 20) / TILE_SIZE);
-
-    if(selectedSlot === 2) { // ATAQUE
-        // Atacar Slimes
-        slimes.forEach(s => {
-            if(Math.hypot(s.x - me.x, s.y - me.y) < 70) {
-                if(isHost) slimes = slimes.filter(sl => sl.id !== s.id);
-                broadcast({ type: 'slime_death', slimeId: s.id });
-            }
-        });
-        // Atacar Jugadores
-        for(let id in players) {
-            if(id === myId) continue;
-            if(Math.hypot(players[id].x - me.x, players[id].y - me.y) < 70) {
-                let hit = { type: 'hit', targetId: id };
-                if(isHost) broadcast(hit); else Object.values(connections)[0].send(hit);
-            }
-        }
-    } else if(selectedSlot === 3) { // CONSTRUIR
-        // Colocar roca delante
-        let bx = worldX, by = worldY;
-        if(world[bx] && world[bx][by] === 0) {
-            world[bx][by] = 2;
-            let bData = { type: 'build', x: bx, y: by, v: 2 };
-            if(isHost) broadcast(bData); else Object.values(connections)[0].send(bData);
-        }
-    }
-}
-
-// --- MOTOR DE JUEGO ---
+// --- LOGICA DE RED (SIN ERRORES DE RELEVÓ) ---
 function startHost() {
-    isHost = true; generateWorld();
-    me.name = document.getElementById('playerName').value || "Host";
-    const peer = new Peer();
-    peer.on('open', id => { myId = id; players[id] = me; document.getElementById('id-display').innerText = id; init(); });
+    isHost = true;
+    // Generar mundo
+    for(let x=0; x<40; x++) { world[x] = []; for(let y=0; y<40; y++) world[x][y] = Math.random()<0.06 ? 1 : 0; }
+    for(let i=0; i<8; i++) slimes.push({id: i, x: Math.random()*2000, y: Math.random()*2000});
+
+    peer = new Peer();
+    peer.on('open', id => { 
+        myId = id; players[id] = me; 
+        document.getElementById('display-id').innerText = id;
+        initGame();
+    });
     peer.on('connection', conn => {
-        conn.on('open', () => { connections[conn.peer] = conn; conn.send({ type: 'init', world, players, slimes }); updateUI(); });
+        conn.on('open', () => {
+            connections[conn.peer] = conn;
+            // Mandar datos críticos al entrar
+            conn.send({ type: 'init', world, players, slimes });
+        });
         conn.on('data', data => handleData(data, conn.peer));
     });
 }
 
 function startJoin() {
     const hostId = document.getElementById('joinId').value.trim();
-    me.name = document.getElementById('playerName').value || "Player";
-    const peer = new Peer();
+    peer = new Peer();
     peer.on('open', id => {
         myId = id; players[id] = me;
         const conn = peer.connect(hostId);
-        conn.on('open', () => { connections[hostId] = conn; conn.send({ type: 'join', p: me }); init(); });
+        conn.on('open', () => {
+            connections[hostId] = conn;
+            conn.send({ type: 'join', p: me });
+            initGame();
+        });
         conn.on('data', data => handleData(data, hostId));
     });
 }
 
-function init() {
+function handleData(data, senderId) {
+    if (data.type === 'init') { world = data.world; players = data.players; slimes = data.slimes; }
+    if (data.type === 'join') { 
+        players[senderId] = data.p; 
+        if(isHost) broadcast({ type: 'new', id: senderId, p: data.p });
+        updatePlayerUI();
+    }
+    if (data.type === 'new') { players[data.id] = data.p; updatePlayerUI(); }
+    if (data.type === 'sync') {
+        if(!players[senderId]) return;
+        players[senderId].targetX = data.x; players[senderId].targetY = data.y;
+        players[senderId].item = data.item; players[senderId].hp = data.hp;
+        if(isHost) broadcast(data, senderId); // RELEVÓ CRÍTICO
+    }
+    if (data.type === 'hit') { if(data.targetId === myId) takeDamage(20); }
+    if (data.type === 'slime_update' && !isHost) slimes = data.slimes;
+}
+
+function broadcast(data, skip = null) {
+    for(let id in connections) if(id !== skip) connections[id].send(data);
+}
+
+// --- JUEGO ---
+function takeDamage(amt) {
+    if(isDead) return;
+    me.hp -= amt;
+    document.getElementById('hp-fill').style.width = me.hp + "%";
+    if(me.hp <= 0) {
+        isDead = true;
+        document.getElementById('death-screen').style.display = 'block';
+    }
+}
+
+function respawn() {
+    me.hp = 100;
+    me.x = 1000; me.y = 1000;
+    isDead = false;
+    document.getElementById('hp-fill').style.width = "100%";
+    document.getElementById('death-screen').style.display = 'none';
+}
+
+function setSlot(n) {
+    selectedSlot = n; me.item = n;
+    document.querySelectorAll('.slot').forEach(s => s.classList.remove('active'));
+    document.getElementById('s'+n).classList.add('active');
+}
+
+function initGame() {
     document.getElementById('setup').style.display = 'none';
-    document.getElementById('hotbar').style.display = 'flex';
-    document.getElementById('player-tag').innerText = me.name;
-    window.addEventListener('keydown', e => { 
-        keys[e.key.toLowerCase()] = true;
-        if(e.key === '1') setSlot(1); if(e.key === '2') setSlot(2); if(e.key === '3') setSlot(3);
-    });
+    window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
     window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
-    canvas.addEventListener('mousedown', interact);
+    canvas.addEventListener('mousedown', () => {
+        if(selectedSlot === 2) {
+            for(let id in players) {
+                if(id === myId) continue;
+                if(Math.hypot(players[id].x - me.x, players[id].y - me.y) < 70) {
+                    let hit = { type: 'hit', targetId: id };
+                    if(isHost) broadcast(hit); else Object.values(connections)[0].send(hit);
+                }
+            }
+        }
+    });
     requestAnimationFrame(loop);
 }
 
-function updateAI() {
-    if(!isHost) return;
-    slimes.forEach(s => {
-        let target = Object.values(players)[0]; // Simplificado al primero
-        let angle = Math.atan2(target.y - s.y, target.x - s.x);
-        
-        // Evadir árboles/rocas
-        let nx = s.x + Math.cos(angle) * s.speed;
-        let ny = s.y + Math.sin(angle) * s.speed;
-        if(world[Math.floor(nx/64)] && world[Math.floor(nx/64)][Math.floor(ny/64)] !== 0) angle += 1.5;
-
-        s.x += Math.cos(angle) * s.speed;
-        s.y += Math.sin(angle) * s.speed;
-        
-        // Daño por contacto
-        if(Math.hypot(target.x - s.x, target.y - s.y) < 30) takeDamage(0.5); 
-    });
-}
-
 function loop() {
-    const s = 5;
-    if(keys['a']) me.x -= s; if(keys['d']) me.x += s;
-    if(keys['w']) me.y -= s; if(keys['s']) me.y += s;
+    if(!isDead) {
+        if(keys['a']) me.x -= 5; if(keys['d']) me.x += 5;
+        if(keys['w']) me.y -= 5; if(keys['s']) me.y += 5;
+    }
 
-    if(isHost) updateAI();
-    camera.x = me.x - canvas.width/2; camera.y = me.y - canvas.height/2;
+    camera.x = me.x - canvas.width/2;
+    camera.y = me.y - canvas.height/2;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.save(); ctx.translate(-camera.x, -camera.y);
+    ctx.save();
+    ctx.translate(-camera.x, -camera.y);
 
-    // Dibujar Suelo y Objetos
-    for(let x=0; x<WORLD_SIZE; x++) {
-        for(let y=0; y<WORLD_SIZE; y++) {
-            if(world[x][y] === 1) { // Arbol
-                ctx.fillStyle = "#451a03"; ctx.fillRect(x*64+24, y*64+40, 16, 24);
-                ctx.fillStyle = "#14532d"; ctx.beginPath(); ctx.arc(x*64+32, y*64+20, 30, 0, 7); ctx.fill();
-            }
-            if(world[x][y] === 2) { // Roca
-                ctx.fillStyle = "#64748b"; ctx.beginPath(); ctx.arc(x*64+32, y*64+45, 18, 0, 7); ctx.fill();
+    // Mundo
+    for(let x=0; x<world.length; x++) {
+        for(let y=0; y<world[x].length; y++) {
+            if(world[x][y] === 1) {
+                ctx.fillStyle = "#14532d"; ctx.beginPath(); ctx.arc(x*64+32, y*64+32, 25, 0, 7); ctx.fill();
             }
         }
     }
 
-    // Slimes
-    slimes.forEach(sl => {
-        ctx.fillStyle = "rgba(34, 197, 94, 0.8)";
-        ctx.beginPath(); ctx.ellipse(sl.x, sl.y, 20, 15 + Math.sin(Date.now()/200)*3, 0, 0, 7); ctx.fill();
+    // Slimes (IA simple Host)
+    if(isHost) {
+        slimes.forEach(s => {
+            let angle = Math.atan2(me.y - s.y, me.x - s.x);
+            s.x += Math.cos(angle) * 1.5; s.y += Math.sin(angle) * 1.5;
+            if(Math.hypot(me.x - s.x, me.y - s.y) < 30) takeDamage(0.2);
+        });
+        broadcast({ type: 'slime_update', slimes });
+    }
+
+    slimes.forEach(s => {
+        ctx.fillStyle = "lime"; ctx.beginPath(); ctx.ellipse(s.x, s.y, 15, 10, 0, 0, 7); ctx.fill();
     });
 
     // Jugadores
     for(let id in players) {
         let p = players[id];
-        if(id !== myId) { p.x += (p.targetX - p.x) * 0.15; p.y += (p.targetY - p.y) * 0.15; }
-        
-        ctx.fillStyle = p.color; ctx.fillRect(p.x-15, p.y-20, 30, 40);
-        ctx.fillStyle = "white"; ctx.textAlign = "center"; ctx.fillText(p.name + (p.item==2?" ⚔️":""), p.x, p.y-30);
+        if(id !== myId) {
+            p.x += (p.targetX - p.x) * 0.2; p.y += (p.targetY - p.y) * 0.2;
+        } else {
+            broadcast({ type: 'sync', x: me.x, y: me.y, item: me.item, hp: me.hp });
+        }
+        ctx.fillStyle = p.hp <= 0 ? "gray" : p.color;
+        ctx.fillRect(p.x-15, p.y-20, 30, 40);
+        ctx.fillStyle = "white"; ctx.textAlign = "center"; ctx.fillText(p.name + (p.item==2?" [X]":""), p.x, p.y-25);
     }
 
-    broadcast({ type: 'sync', x: me.x, y: me.y, item: me.item, hp: me.hp, slimes: isHost?slimes:null });
     ctx.restore();
     requestAnimationFrame(loop);
 }
 
-function updateUI() {
+function updatePlayerUI() {
     document.getElementById('player-list').innerHTML = Object.values(players).map(p => `• ${p.name}`).join('<br>');
 }
 </script>

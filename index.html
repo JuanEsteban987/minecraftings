@@ -68,13 +68,8 @@ let players={};
 let myId=Math.random().toString(36).slice(2);
 let roomCode="";
 
-function host(){
-isHost=true;
-startRTC();
-}
-function join(){
-startRTC();
-}
+function host(){ isHost=true; startRTC(); }
+function join(){ startRTC(); }
 
 function startRTC(){
 pc=new RTCPeerConnection({
@@ -83,15 +78,11 @@ iceServers:[{urls:"stun:stun.l.google.com:19302"}]
 
 channel=pc.createDataChannel("game");
 
-channel.onmessage=e=>{
-players=JSON.parse(e.data);
-};
+channel.onmessage=e=>{ players=JSON.parse(e.data); };
 
 pc.ondatachannel=e=>{
 channel=e.channel;
-channel.onmessage=ev=>{
-players=JSON.parse(ev.data);
-};
+channel.onmessage=ev=>{ players=JSON.parse(ev.data); };
 };
 
 pc.onicecandidate=e=>{
@@ -123,24 +114,27 @@ onkeydown=e=>keys[e.key]=true;
 onkeyup=e=>keys[e.key]=false;
 
 let me={
-x:450,
-y:280,
+x:1200,
+y:900,
 emoji:"🧑",
 name:""
 };
 
-// 🌳 mundo con árboles emoji
+// 🌳 mundo grande
 const TILE=40;
-const MAP_W=60;
-const MAP_H=40;
+const MAP_W=120;
+const MAP_H=120;
 let world=[];
 
 for(let y=0;y<MAP_H;y++){
 world[y]=[];
 for(let x=0;x<MAP_W;x++){
-world[y][x]=Math.random()<0.08?"🌳":"";
+world[y][x]=Math.random()<0.07?"🌳":"";
 }
 }
+
+// 📷 cámara
+let cam={x:0,y:0};
 
 function startGame(){
 me.name=document.getElementById("name").value||"Jugador";
@@ -154,11 +148,16 @@ loop();
 
 // ---------- LOGICA ----------
 function update(){
-let sp=3;
+
+let sp=4;
 if(keys["w"]) me.y-=sp;
 if(keys["s"]) me.y+=sp;
 if(keys["a"]) me.x-=sp;
 if(keys["d"]) me.x+=sp;
+
+// actualizar cámara
+cam.x = me.x - canvas.width/2;
+cam.y = me.y - canvas.height/2;
 
 players[myId]=me;
 
@@ -175,14 +174,19 @@ ctx.clearRect(0,0,canvas.width,canvas.height);
 ctx.fillStyle="#3cb043";
 ctx.fillRect(0,0,canvas.width,canvas.height);
 
-// árboles
+// árboles con cámara
 ctx.font="28px serif";
 for(let y=0;y<MAP_H;y++){
 for(let x=0;x<MAP_W;x++){
 let t=world[y][x];
-if(t){
-ctx.fillText(t,x*TILE,y*TILE+30);
-}
+if(!t) continue;
+
+let px = x*TILE - cam.x;
+let py = y*TILE - cam.y;
+
+if(px<-TILE || py<-TILE || px>canvas.width || py>canvas.height) continue;
+
+ctx.fillText(t,px,py+30);
 }
 }
 
@@ -193,14 +197,17 @@ for(let id in players){
 let p=players[id];
 if(!p)continue;
 
+let px=p.x-cam.x;
+let py=p.y-cam.y;
+
 // nametag
 ctx.fillStyle="white";
 ctx.font="14px sans-serif";
-ctx.fillText(p.name,p.x,p.y-18);
+ctx.fillText(p.name,px,py-18);
 
 // emoji
 ctx.font="26px serif";
-ctx.fillText(p.emoji,p.x,p.y);
+ctx.fillText(p.emoji,px,py);
 }
 }
 

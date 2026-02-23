@@ -2,197 +2,121 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Minecraft RPG 2D</title>
+<title>Minecraft RPG P2P</title>
 <style>
-body{margin:0;overflow:hidden;background:#1b1b1b;font-family:sans-serif;color:white}
-canvas{display:block;background:#6ec6ff}
-#ui{
-position:fixed;
-top:10px;left:10px;
-background:rgba(0,0,0,.5);
-padding:8px;border-radius:8px
-}
+body{margin:0;background:#1b1b1b;color:white;font-family:sans-serif;text-align:center}
+canvas{background:#6ec6ff;display:block;margin:auto}
+#menu{padding:20px}
 </style>
 </head>
 <body>
 
-<canvas id="game"></canvas>
-
-<div id="ui">
-❤️ <span id="hp">100</span>
-⭐ <span id="lvl">1</span>
-✨ XP <span id="xp">0</span>
-👥 <span id="players">1</span>
+<div id="menu">
+<h2>Minecraft RPG P2P</h2>
+<button onclick="host()">HOST</button>
+<button onclick="join()">JOIN</button>
+<br><br>
+<input id="code" placeholder="codigo">
+<p id="info"></p>
 </div>
 
+<canvas id="game" width="800" height="500" style="display:none"></canvas>
+
 <script>
-const canvas=document.getElementById("game");
-const ctx=canvas.getContext("2d");
-canvas.width=innerWidth;
-canvas.height=innerHeight;
+let pc, channel;
+let isHost=false;
+let peers={};
 
-const TILE=32;
-const W=120;
-const H=120;
-
-let keys={};
-document.addEventListener("keydown",e=>keys[e.key]=true);
-document.addEventListener("keyup",e=>keys[e.key]=false);
-
-let mouse={x:0,y:0,down:false};
-canvas.onmousedown=()=>mouse.down=true;
-canvas.onmouseup=()=>mouse.down=false;
-canvas.onmousemove=e=>{mouse.x=e.clientX;mouse.y=e.clientY};
-
-// 🌍 mundo procedural top-down
-let world=[];
-for(let y=0;y<H;y++){
-world[y]=[];
-for(let x=0;x<W;x++){
-let r=Math.random();
-if(r<0.08) world[y][x]=3; // piedra
-else if(r<0.15) world[y][x]=2; // árbol
-else world[y][x]=1; // pasto
-}
+function host(){
+isHost=true;
+startRTC();
 }
 
-// 👤 jugador
-let player={
-id:Math.random()+"",
-x:60,y:60,
-hp:100,
-xp:0,
-lvl:1,
-color:"#ffcc00"
-};
+function join(){
+startRTC();
+}
 
-let others={};
+function startRTC(){
 
-// 🧟 mobs
-let mobs=[];
-for(let i=0;i<20;i++){
-mobs.push({
-x:Math.random()*W,
-y:Math.random()*H,
-hp:20
+pc = new RTCPeerConnection({
+iceServers:[{urls:"stun:stun.l.google.com:19302"}]
 });
-}
 
-// 👥 multiplayer pestañas
-const channel=new BroadcastChannel("mc_rpg");
+channel = pc.createDataChannel("game");
 
 channel.onmessage=e=>{
-let d=e.data;
-if(d.type==="state" && d.id!==player.id) others[d.id]=d;
-if(d.type==="leave") delete others[d.id];
+peers=JSON.parse(e.data);
 };
 
-setInterval(()=>{
-channel.postMessage({...player,type:"state"});
-},60);
-
-window.onbeforeunload=()=>{
-channel.postMessage({type:"leave",id:player.id});
+pc.ondatachannel=e=>{
+channel=e.channel;
+channel.onmessage=ev=>{
+peers=JSON.parse(ev.data);
+};
 };
 
-// 🎮 lógica RPG
+pc.onicecandidate=e=>{
+if(!e.candidate){
+let code=btoa(JSON.stringify(pc.localDescription));
+document.getElementById("code").value=code;
+document.getElementById("info").textContent="Comparte este código";
+}
+};
+
+if(isHost){
+pc.createOffer().then(o=>pc.setLocalDescription(o));
+}else{
+let code=prompt("Pega el código del host");
+let desc=new RTCSessionDescription(JSON.parse(atob(code)));
+pc.setRemoteDescription(desc)
+.then(()=>pc.createAnswer())
+.then(a=>pc.setLocalDescription(a));
+}
+
+startGame();
+}
+
+// 🎮 juego RPG simple
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+let keys={};
+let me={x:200,y:200};
+let players={};
+
+onkeydown=e=>keys[e.key]=true;
+onkeyup=e=>keys[e.key]=false;
+
+function startGame(){
+document.getElementById("menu").style.display="none";
+canvas.style.display="block";
+loop();
+}
+
 function update(){
+let sp=2;
+if(keys["w"]) me.y-=sp;
+if(keys["s"]) me.y+=sp;
+if(keys["a"]) me.x-=sp;
+if(keys["d"]) me.x+=sp;
 
-let sp=0.15;
-if(keys["w"]) player.y-=sp;
-if(keys["s"]) player.y+=sp;
-if(keys["a"]) player.x-=sp;
-if(keys["d"]) player.x+=sp;
+players.me=me;
 
-// romper bloque
-if(mouse.down){
-let tx=Math.floor((mouse.x-cam.x)/TILE);
-let ty=Math.floor((mouse.y-cam.y)/TILE);
-
-if(world[ty]&&world[ty][tx]){
-if(world[ty][tx]==2||world[ty][tx]==3){
-world[ty][tx]=1;
-player.xp+=2;
+if(channel && channel.readyState==="open"){
+channel.send(JSON.stringify(players));
 }
 }
-}
-
-// subir nivel
-if(player.xp>player.lvl*20){
-player.xp=0;
-player.lvl++;
-player.hp=100;
-}
-
-// mobs IA
-for(let m of mobs){
-let dx=player.x-m.x;
-let dy=player.y-m.y;
-let dist=Math.hypot(dx,dy);
-
-if(dist<6){
-m.x+=dx/dist*0.03;
-m.y+=dy/dist*0.03;
-}
-
-if(dist<0.8){
-player.hp-=0.1;
-}
-
-if(m.hp<=0){
-m.x=Math.random()*W;
-m.y=Math.random()*H;
-player.xp+=5;
-}
-}
-
-document.getElementById("hp").textContent=Math.floor(player.hp);
-document.getElementById("lvl").textContent=player.lvl;
-document.getElementById("xp").textContent=player.xp;
-document.getElementById("players").textContent=1+Object.keys(others).length;
-}
-
-// 🎥 cámara
-let cam={x:0,y:0};
 
 function draw(){
-
-cam.x=canvas.width/2-player.x*TILE;
-cam.y=canvas.height/2-player.y*TILE;
-
 ctx.clearRect(0,0,canvas.width,canvas.height);
 
-// mundo
-for(let y=0;y<H;y++){
-for(let x=0;x<W;x++){
-
-let t=world[y][x];
-if(!t)continue;
-
-if(t==1) ctx.fillStyle="#3cb043";
-if(t==2) ctx.fillStyle="#1f7a1f";
-if(t==3) ctx.fillStyle="#888";
-
-ctx.fillRect(x*TILE+cam.x,y*TILE+cam.y,TILE,TILE);
-}
+for(let id in peers){
+let p=peers[id];
+ctx.fillStyle="cyan";
+ctx.fillRect(p.x,p.y,20,20);
 }
 
-// mobs
-ctx.fillStyle="red";
-for(let m of mobs){
-ctx.fillRect(m.x*TILE+cam.x,m.y*TILE+cam.y,TILE,TILE);
-}
-
-// otros players
-for(let id in others){
-let p=others[id];
-ctx.fillStyle=p.color||"cyan";
-ctx.fillRect(p.x*TILE+cam.x,p.y*TILE+cam.y,TILE,TILE);
-}
-
-// player
-ctx.fillStyle=player.color;
-ctx.fillRect(player.x*TILE+cam.x,player.y*TILE+cam.y,TILE,TILE);
+ctx.fillStyle="yellow";
+ctx.fillRect(me.x,me.y,20,20);
 }
 
 function loop(){
@@ -200,7 +124,6 @@ update();
 draw();
 requestAnimationFrame(loop);
 }
-loop();
 </script>
 </body>
 </html>

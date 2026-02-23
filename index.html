@@ -4,8 +4,18 @@
 <meta charset="UTF-8">
 <title>Minecraft RPG P2P</title>
 <style>
-body{margin:0;background:#1b1b1b;color:white;font-family:sans-serif;text-align:center}
-canvas{background:#6ec6ff;display:block;margin:auto}
+body{
+margin:0;
+background:#1b1b1b;
+color:white;
+font-family:sans-serif;
+text-align:center
+}
+canvas{
+background:#6ec6ff;
+display:block;
+margin:auto
+}
 #menu{padding:20px}
 </style>
 </head>
@@ -13,6 +23,7 @@ canvas{background:#6ec6ff;display:block;margin:auto}
 
 <div id="menu">
 <h2>Minecraft RPG P2P</h2>
+<input id="name" placeholder="tu nombre"><br><br>
 <button onclick="host()">HOST</button>
 <button onclick="join()">JOIN</button>
 <br><br>
@@ -20,38 +31,38 @@ canvas{background:#6ec6ff;display:block;margin:auto}
 <p id="info"></p>
 </div>
 
-<canvas id="game" width="800" height="500" style="display:none"></canvas>
+<canvas id="game" width="900" height="550" style="display:none"></canvas>
 
 <script>
+// ---------- WEBRTC ----------
 let pc, channel;
 let isHost=false;
-let peers={};
+let players={};
+let myId=Math.random().toString(36).slice(2);
 
 function host(){
 isHost=true;
 startRTC();
 }
-
 function join(){
 startRTC();
 }
 
 function startRTC(){
-
-pc = new RTCPeerConnection({
+pc=new RTCPeerConnection({
 iceServers:[{urls:"stun:stun.l.google.com:19302"}]
 });
 
-channel = pc.createDataChannel("game");
+channel=pc.createDataChannel("game");
 
 channel.onmessage=e=>{
-peers=JSON.parse(e.data);
+players=JSON.parse(e.data);
 };
 
 pc.ondatachannel=e=>{
 channel=e.channel;
 channel.onmessage=ev=>{
-peers=JSON.parse(ev.data);
+players=JSON.parse(ev.data);
 };
 };
 
@@ -76,47 +87,100 @@ pc.setRemoteDescription(desc)
 startGame();
 }
 
-// 🎮 juego RPG simple
+// ---------- JUEGO RPG ----------
 const canvas=document.getElementById("game");
 const ctx=canvas.getContext("2d");
-let keys={};
-let me={x:200,y:200};
-let players={};
 
+let keys={};
 onkeydown=e=>keys[e.key]=true;
 onkeyup=e=>keys[e.key]=false;
 
+let me={
+x:450,
+y:280,
+emoji:"🧑",
+name:"",
+};
+
+// 🌳 mundo con árboles emoji
+const TILE=40;
+const MAP_W=60;
+const MAP_H=40;
+let world=[];
+
+for(let y=0;y<MAP_H;y++){
+world[y]=[];
+for(let x=0;x<MAP_W;x++){
+world[y][x]=Math.random()<0.08?"🌳":"";
+}
+}
+
 function startGame(){
+me.name=document.getElementById("name").value||"Jugador";
 document.getElementById("menu").style.display="none";
 canvas.style.display="block";
 loop();
 }
 
+// ---------- LOGICA ----------
 function update(){
-let sp=2;
+
+let sp=3;
 if(keys["w"]) me.y-=sp;
 if(keys["s"]) me.y+=sp;
 if(keys["a"]) me.x-=sp;
 if(keys["d"]) me.x+=sp;
 
-players.me=me;
+// guardar mi estado
+players[myId]=me;
 
+// enviar a peers
 if(channel && channel.readyState==="open"){
 channel.send(JSON.stringify(players));
 }
 }
 
+// ---------- DIBUJO ----------
 function draw(){
+
 ctx.clearRect(0,0,canvas.width,canvas.height);
 
-for(let id in peers){
-let p=peers[id];
-ctx.fillStyle="cyan";
-ctx.fillRect(p.x,p.y,20,20);
+// dibujar pasto
+ctx.fillStyle="#3cb043";
+ctx.fillRect(0,0,canvas.width,canvas.height);
+
+// árboles emoji
+ctx.font="28px serif";
+for(let y=0;y<MAP_H;y++){
+for(let x=0;x<MAP_W;x++){
+let t=world[y][x];
+if(t){
+ctx.fillText(
+t,
+x*TILE,
+y*TILE+30
+);
+}
+}
 }
 
-ctx.fillStyle="yellow";
-ctx.fillRect(me.x,me.y,20,20);
+// players
+ctx.font="24px serif";
+ctx.textAlign="center";
+
+for(let id in players){
+let p=players[id];
+if(!p)continue;
+
+// nametag
+ctx.fillStyle="white";
+ctx.font="14px sans-serif";
+ctx.fillText(p.name,p.x,p.y-18);
+
+// emoji skin
+ctx.font="26px serif";
+ctx.fillText(p.emoji,p.x,p.y);
+}
 }
 
 function loop(){

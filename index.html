@@ -2,177 +2,240 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Minecraft RPG Online</title>
+<title>Minecraft RPG 2D Multiplayer</title>
 <style>
-body{margin:0;background:#1b1b1b;color:white;font-family:sans-serif;overflow:hidden}
-#menu{text-align:center;padding:20px}
-canvas{background:#6ec6ff;display:none}
-#hud{
-position:fixed;
-right:10px;
-top:10px;
-background:rgba(0,0,0,.6);
-padding:12px;
-border-radius:10px;
-display:none;
-width:260px;
-}
+body{margin:0;font-family:sans-serif;background:#222;color:white;overflow:hidden}
+#menu{position:absolute;left:10px;top:10px;background:#000a;padding:10px;border-radius:10px}
+input,button{margin:3px}
+#game{display:none}
+#ui{position:absolute;left:10px;top:10px;background:#0007;padding:8px;border-radius:10px}
+#players{font-size:12px;margin-top:5px}
+#chat{height:90px;overflow:auto;background:#111;margin-top:5px;padding:4px}
 </style>
 </head>
 <body>
 
 <div id="menu">
-<h2>Minecraft RPG Online</h2>
-<input id="name" placeholder="tu nombre"><br><br>
-<button onclick="host()">HOST</button>
-<button onclick="join()">JOIN</button><br><br>
-<input id="roomInput" placeholder="codigo sala">
+<button onclick="host()">HOST</button><br>
+Código:<br>
+<input id="code" style="width:180px"><br>
+<button onclick="join()">JOIN</button>
 </div>
 
-<div id="hud">
-<b>🎮 Sala:</b> <span id="roomLabel"></span><br>
-<b>👥 Jugadores:</b>
-<div id="playersList"></div>
-</div>
+<canvas id="c"></canvas>
 
-<canvas id="game" width="900" height="550"></canvas>
+<div id="ui">
+<div>Sala: <span id="room"></span></div>
+<div id="players"></div>
+<div id="chat"></div>
+<input id="msg" placeholder="chat">
+</div>
 
 <script>
-// ---------- SALAS ----------
-let socket=new WebSocket("wss://signaling.simplewebrtc.com");
-let room=null;
-let myId=Math.random().toString(36).slice(2);
-let peers={};
-let players={};
-
-// ---------- HOST ----------
-function host(){
-room=Math.random().toString(36).slice(2,7);
-document.getElementById("roomInput").value=room;
-connect(room);
-}
-
-// ---------- JOIN ----------
-function join(){
-room=document.getElementById("roomInput").value.trim();
-if(!room)return alert("Pon codigo");
-connect(room);
-}
-
-// ---------- CONEXION ----------
-function connect(roomName){
-socket.onopen=()=>{
-socket.send(JSON.stringify({
-type:"join",
-room:roomName,
-id:myId
-}));
-};
-
-socket.onmessage=msg=>{
-let data=JSON.parse(msg.data);
-
-if(data.type==="players"){
-players=data.players;
-}
-};
-
-startGame();
-}
-
-// ---------- JUEGO ----------
-const canvas=document.getElementById("game");
+const canvas=document.getElementById("c");
 const ctx=canvas.getContext("2d");
+canvas.width=innerWidth;
+canvas.height=innerHeight;
 
+let ws;
+let peers={};
+let myId=Math.random().toString(36).substr(2,9);
+let room="";
+let players={};
 let keys={};
-onkeydown=e=>keys[e.key]=true;
-onkeyup=e=>keys[e.key]=false;
 
-let me={x:1200,y:900,emoji:"🧑",name:""};
-
-const TILE=40;
-const MAP_W=120;
-const MAP_H=120;
-
-let world=[];
-for(let y=0;y<MAP_H;y++){
-world[y]=[];
-for(let x=0;x<MAP_W;x++){
-world[y][x]=Math.random()<0.07?"🌳":"";
-}
+const TREES=[];
+for(let i=0;i<40;i++){
+TREES.push({x:Math.random()*3000,y:Math.random()*3000});
 }
 
-let cam={x:0,y:0};
-
-function startGame(){
-me.name=document.getElementById("name").value||"Jugador";
-
-document.getElementById("menu").style.display="none";
-document.getElementById("hud").style.display="block";
-canvas.style.display="block";
-document.getElementById("roomLabel").textContent=room;
-
-loop();
-}
-
-// ---------- UPDATE ----------
-function update(){
-let sp=4;
-if(keys["w"]) me.y-=sp;
-if(keys["s"]) me.y+=sp;
-if(keys["a"]) me.x-=sp;
-if(keys["d"]) me.x+=sp;
-
-cam.x=me.x-canvas.width/2;
-cam.y=me.y-canvas.height/2;
+const me={
+x:1500,y:1500,
+emoji:["😀","😎","🤠","👽","🤖"][Math.floor(Math.random()*5)],
+name:"Player"+Math.floor(Math.random()*999)
+};
 
 players[myId]=me;
 
-if(socket.readyState===1){
-socket.send(JSON.stringify({
-type:"state",
-room:room,
-players:players
+function connectWS(){
+ws=new WebSocket("wss://y-webrtc-signaling-eu.herokuapp.com");
+
+ws.onopen=()=>ws.send(JSON.stringify({
+type:"join",
+room
+}));
+
+ws.onmessage=async e=>{
+let msg=JSON.parse(e.data);
+
+if(msg.from===myId)return;
+
+if(msg.type==="offer"){
+let pc=createPeer(msg.from);
+await pc.setRemoteDescription(msg.offer);
+let ans=await pc.createAnswer();
+await pc.setLocalDescription(ans);
+ws.send(JSON.stringify({type:"answer",answer:ans,to:msg.from,room,from:myId}));
+}
+
+if(msg.type==="answer"){
+await peers[msg.from].setRemoteDescription(msg.answer);
+}
+
+if(msg.type==="candidate"){
+if(peers[msg.from])
+await peers[msg.from].addIceCandidate(msg.candidate);
+}
+};
+}
+
+function createPeer(id){
+let pc=new RTCPeerConnection({
+iceServers:[{urls:"stun:stun.l.google.com:19302"}]
+});
+peers[id]=pc;
+
+let dc=pc.createDataChannel("game");
+setupDC(id,dc);
+
+pc.ondatachannel=e=>setupDC(id,e.channel);
+
+pc.onicecandidate=e=>{
+if(e.candidate){
+ws.send(JSON.stringify({
+type:"candidate",
+candidate:e.candidate,
+to:id,room,from:myId
 }));
 }
+};
 
-let list="";
-for(let id in players) list+=players[id].name+"<br>";
-document.getElementById("playersList").innerHTML=list;
+return pc;
 }
 
-// ---------- DRAW ----------
-function draw(){
-ctx.clearRect(0,0,canvas.width,canvas.height);
+function setupDC(id,dc){
+dc.onmessage=e=>{
+let data=JSON.parse(e.data);
 
-ctx.fillStyle="#3cb043";
+if(data.type==="state"){
+players[id]=data.player;
+}
+
+if(data.type==="chat"){
+chat(data.name+": "+data.msg);
+}
+};
+peers[id].dc=dc;
+}
+
+async function host(){
+room=Math.random().toString(36).substr(2,6);
+document.getElementById("code").value=room;
+start();
+}
+
+async function join(){
+room=document.getElementById("code").value;
+if(!room)return;
+start();
+}
+
+async function start(){
+document.getElementById("menu").style.display="none";
+document.getElementById("game").style.display="block";
+document.getElementById("room").innerText=room;
+connectWS();
+
+ws.onopen=async ()=>{
+ws.send(JSON.stringify({type:"join",room,from:myId}));
+
+setTimeout(async ()=>{
+ws.send(JSON.stringify({type:"peers",room,from:myId}));
+},500);
+};
+
+ws.onmessage=async e=>{
+let msg=JSON.parse(e.data);
+if(msg.from===myId)return;
+
+if(msg.type==="peers"){
+let pc=createPeer(msg.from);
+let offer=await pc.createOffer();
+await pc.setLocalDescription(offer);
+ws.send(JSON.stringify({
+type:"offer",offer,to:msg.from,room,from:myId
+}));
+}
+};
+}
+
+function sendState(){
+for(let id in peers){
+let dc=peers[id].dc;
+if(dc && dc.readyState==="open"){
+dc.send(JSON.stringify({type:"state",player:me}));
+}
+}
+}
+
+function sendChat(m){
+for(let id in peers){
+let dc=peers[id].dc;
+if(dc && dc.readyState==="open"){
+dc.send(JSON.stringify({type:"chat",msg:m,name:me.name}));
+}
+}
+chat(me.name+": "+m);
+}
+
+document.getElementById("msg").onkeydown=e=>{
+if(e.key==="Enter"){
+sendChat(e.target.value);
+e.target.value="";
+}
+};
+
+function chat(t){
+let c=document.getElementById("chat");
+c.innerHTML+=t+"<br>";
+c.scrollTop=9999;
+}
+
+addEventListener("keydown",e=>keys[e.key]=true);
+addEventListener("keyup",e=>keys[e.key]=false);
+
+function update(){
+let sp=4;
+if(keys["w"])me.y-=sp;
+if(keys["s"])me.y+=sp;
+if(keys["a"])me.x-=sp;
+if(keys["d"])me.x+=sp;
+
+sendState();
+}
+
+function draw(){
+ctx.fillStyle="#3a7";
 ctx.fillRect(0,0,canvas.width,canvas.height);
 
+let camX=me.x-canvas.width/2;
+let camY=me.y-canvas.height/2;
+
+for(let t of TREES){
 ctx.font="28px serif";
-for(let y=0;y<MAP_H;y++){
-for(let x=0;x<MAP_W;x++){
-let t=world[y][x];
-if(!t) continue;
-let px=x*TILE-cam.x;
-let py=y*TILE-cam.y;
-if(px<-TILE||py<-TILE||px>canvas.width||py>canvas.height) continue;
-ctx.fillText(t,px,py+30);
-}
+ctx.fillText("🌳",t.x-camX,t.y-camY);
 }
 
-ctx.textAlign="center";
 for(let id in players){
 let p=players[id];
-let px=p.x-cam.x;
-let py=p.y-cam.y;
-
-ctx.fillStyle="white";
-ctx.font="14px sans-serif";
-ctx.fillText(p.name,px,py-18);
-
 ctx.font="26px serif";
-ctx.fillText(p.emoji,px,py);
+ctx.fillText(p.emoji,p.x-camX,p.y-camY);
+ctx.font="12px sans-serif";
+ctx.fillText(p.name,p.x-camX-10,p.y-camY-12);
 }
+
+document.getElementById("players").innerHTML=
+"👥 "+Object.keys(players).length+" jugadores";
 }
 
 function loop(){
@@ -180,6 +243,7 @@ update();
 draw();
 requestAnimationFrame(loop);
 }
+loop();
 </script>
 </body>
 </html>

@@ -3,42 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2D Minecraft RPG - Cámara Corregida</title>
+    <title>2D Minecraft RPG - Cámara y Reinos</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        body { 
-            margin: 0; 
-            overflow: hidden; 
-            background: #4a90e2; 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-        }
-        canvas { 
-            display: block; 
-            image-rendering: pixelated; 
-        }
+        body { margin: 0; overflow: hidden; background: #4a90e2; font-family: 'Courier New', Courier, monospace; }
+        canvas { display: block; image-rendering: pixelated; }
         
-        /* UI Estilo Panel */
+        /* Panel de Conexión */
         #ui { 
             position: absolute; top: 15px; left: 15px; 
-            background: rgba(60, 60, 60, 0.9); color: #fff; 
-            padding: 15px; border: 4px solid #1e1e1e;
-            z-index: 10;
+            background: rgba(45, 45, 45, 0.9); color: #fff; 
+            padding: 20px; border: 4px solid #1e1e1e;
+            box-shadow: 6px 6px 0px rgba(0,0,0,0.4); z-index: 10;
         }
-
-        #ui b { color: #ffca28; font-size: 12px; }
-        
+        #ui b { color: #ffca28; display: block; margin-bottom: 5px; }
         input { 
             background: #1e1e1e; border: 2px solid #555; color: #00ff00;
-            padding: 8px; margin-top: 5px; width: 150px; outline: none;
-            display: block;
+            padding: 8px; margin-bottom: 10px; width: 180px; outline: none;
         }
-
         button { 
-            cursor: pointer; padding: 8px 12px; background: #4CAF50; 
+            cursor: pointer; padding: 10px; background: #4CAF50; 
             color: white; border: 2px solid #2e7d32; font-weight: bold;
-            margin-top: 10px; width: 100%;
+            width: 100%; box-shadow: 3px 3px 0px #1b5e20;
         }
-        button:active { transform: translateY(2px); }
+        button:active { transform: translate(2px, 2px); box-shadow: 0px 0px 0px; }
 
         /* Hotbar de Bloques */
         #creative-menu {
@@ -46,25 +34,19 @@
             transform: translateX(-50%);
             background: rgba(40, 40, 40, 0.9);
             padding: 8px; border: 4px solid #1e1e1e;
-            display: flex; gap: 8px;
-            z-index: 10;
+            display: flex; gap: 8px; z-index: 10;
         }
         .slot {
             width: 50px; height: 50px; border: 4px solid #555;
             display: flex; align-items: center; justify-content: center;
-            cursor: pointer; background: #2c2c2c;
+            cursor: pointer; background: #2c2c2c; transition: 0.1s;
         }
-        .slot:hover { border-color: #aaa; }
-        .slot.selected { border-color: #ffca28; background: #444; }
-        
-        .block-preview { 
-            width: 30px; height: 30px; 
-            box-shadow: inset -3px -3px 0px rgba(0,0,0,0.3); 
-        }
+        .slot.selected { border-color: #ffca28; background: #444; transform: translateY(-5px); }
+        .block-preview { width: 30px; height: 30px; box-shadow: inset -4px -4px 0px rgba(0,0,0,0.3); }
 
-        #instrucciones {
+        #controles {
             position: absolute; top: 15px; right: 15px;
-            color: white; background: rgba(0,0,0,0.5);
+            background: rgba(0,0,0,0.4); color: white;
             padding: 10px; font-size: 12px; pointer-events: none;
         }
     </style>
@@ -72,19 +54,15 @@
 <body>
 
     <div id="ui">
-        <b>REINO (CÓDIGO):</b>
-        <input type="text" id="realm-input" placeholder="Ej: mi-mundo-1">
-        
+        <b>ID DEL REINO:</b>
+        <input type="text" id="realm-input" placeholder="nombre-del-mundo">
         <b>TU NOMBRE:</b>
-        <input type="text" id="name-input" placeholder="Jugador 1">
-        
-        <button id="btn-conectar">ENTRAR AL MUNDO</button>
+        <input type="text" id="name-input" placeholder="Jugador">
+        <button onclick="unirse()">ENTRAR AL REINO</button>
     </div>
 
-    <div id="instrucciones">
-        WASD: Moverse<br>
-        Click Izq: Poner Bloque<br>
-        Click Der: Borrar Bloque
+    <div id="controles">
+        WASD: Moverse | Click Izq: Poner | Click Der: Quitar
     </div>
 
     <div id="creative-menu">
@@ -97,27 +75,6 @@
     </div>
 
     <canvas id="gameCanvas"></canvas>
-
     <script src="game.js"></script>
-
-    <script>
-        // Lógica de selección visual de la hotbar
-        function selectBlock(id, element) {
-            window.selectedBlock = id; // Cambia la variable global en game.js
-            document.querySelectorAll('.slot').forEach(s => s.classList.remove('selected'));
-            element.classList.add('selected');
-        }
-
-        // Manejo del botón de conexión
-        document.getElementById('btn-conectar').onclick = function() {
-            const codigo = document.getElementById('realm-input').value || "provisional";
-            const nombre = document.getElementById('name-input').value || "Invitado";
-            
-            if (window.conectarAlReino) {
-                window.conectarAlReino(codigo, nombre);
-                document.getElementById('ui').style.display = 'none'; // Ocultar UI al entrar
-            }
-        };
-    </script>
 </body>
 </html>

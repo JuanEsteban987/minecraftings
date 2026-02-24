@@ -2,74 +2,75 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>RPG P2P: Fix IA & Conexión</title>
+    <title>RPG P2P: Tienda, PvP & Barras de Vida</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         body { font-family: 'Courier New', monospace; margin: 0; overflow: hidden; background: #1a1a1a; color: white; }
         canvas { background: #2d5a27; display: none; }
         
+        /* UI Estilo Retro */
         #main-menu {
             position: absolute; width: 100%; height: 100%; background: radial-gradient(#2d5a27, #1a1a1a);
             display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100;
         }
-        .menu-box { background: rgba(0,0,0,0.9); padding: 30px; border: 4px solid #8b4513; border-radius: 15px; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        .menu-box { background: rgba(0,0,0,0.9); padding: 30px; border: 4px solid #8b4513; border-radius: 15px; text-align: center; }
         input, button { margin: 10px; padding: 12px; font-size: 16px; border-radius: 5px; border: none; }
-        button { cursor: pointer; background: #ffd700; font-weight: bold; transition: 0.2s; }
-        button:hover { background: #fff; transform: scale(1.05); }
+        button { cursor: pointer; background: #ffd700; font-weight: bold; }
 
-        .ui-panel { position: absolute; top: 10px; left: 10px; z-index: 10; padding: 10px; background: rgba(0,0,0,0.8); border: 2px solid #555; display: none; }
-        .custom-panel { position: absolute; top: 10px; right: 10px; z-index: 10; padding: 15px; background: rgba(40, 40, 40, 0.9); border: 3px solid #8b4513; width: 180px; display: none; }
+        /* Paneles de Juego */
+        .ui-left { position: absolute; top: 10px; left: 10px; z-index: 10; padding: 10px; background: rgba(0,0,0,0.8); border: 2px solid #555; display: none; min-width: 150px; }
+        .ui-right { position: absolute; top: 10px; right: 10px; z-index: 10; padding: 15px; background: rgba(40, 40, 40, 0.9); border: 3px solid #8b4513; display: none; }
+        
         #hud { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); text-align: center; pointer-events: none; display: none; }
-        .bar { width: 200px; height: 12px; background: #444; border: 1px solid #000; margin: 5px; overflow: hidden; }
-        .hp-fill { background: #ff3333; height: 100%; width: 100%; }
         #inventory { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 250px; background: #333; border: 4px solid #8b4513; padding: 20px; display: none; z-index: 20; }
+        
+        .player-list-item { color: #0f0; font-size: 12px; margin: 2px 0; }
+        .gold-count { color: #ffd700; font-weight: bold; font-size: 18px; }
     </style>
 </head>
 <body>
 
     <div id="main-menu">
         <div class="menu-box">
-            <h1 style="color: #ffd700;">MULTIPLAYER RPG</h1>
+            <h1 style="color: #ffd700;">WORLD P2P RPG</h1>
             <input type="text" id="init-nick" placeholder="Tu Nombre" maxlength="10">
             <div>
                 Ropa: <input type="color" id="init-skin" value="#ffd700">
-                Accesorio: <input type="color" id="init-acc" value="#ff0000">
+                Acc: <input type="color" id="init-acc" value="#ff0000">
             </div>
-            <hr style="border: 1px solid #444;">
-            <button onclick="startAsHost()">CREAR SALA (HOST)</button>
-            <div style="margin-top: 10px;">
-                <input type="text" id="join-id" placeholder="ID del Host">
-                <button onclick="startAsClient()">UNIRSE A SALA</button>
-            </div>
+            <button onclick="startGame(true)">CREAR SALA</button><br>
+            <input type="text" id="join-id" placeholder="ID del Host">
+            <button onclick="startGame(false)">UNIRSE</button>
         </div>
     </div>
 
-    <div class="ui-panel" id="panel-left">
-        ID Sala: <span id="my-id" style="color:#0f0; font-weight: bold;">...</span><br>
-        <div id="host-status">Estado: Iniciando...</div>
-        <div id="player-count">Jugadores: 1</div>
+    <div class="ui-left" id="panel-left">
+        <strong>ID:</strong> <span id="my-id" style="color:#0f0">...</span><br>
+        <div id="player-count" style="margin: 5px 0;">Jugadores: 1</div>
+        <div id="player-names"></div>
+        <hr>
+        <div class="gold-count">ORO: $<span id="gold-val">0</span></div>
     </div>
 
-    <div class="custom-panel" id="panel-right">
-        <h4 style="margin:0 0 10px 0; color:gold">ESTILO</h4>
-        <input type="text" id="live-nick" oninput="updateAppearance()" placeholder="Nick" style="width:90%">
-        <div style="display:flex; justify-content: space-around; margin-top:10px;">
-            <input type="color" id="live-skin" onchange="updateAppearance()">
-            <input type="color" id="live-acc" onchange="updateAppearance()">
-        </div>
+    <div class="ui-right" id="panel-right">
+        <input type="text" id="live-nick" oninput="updateAppearance()" style="width:100%">
+        <input type="color" id="live-skin" onchange="updateAppearance()">
+        <input type="color" id="live-acc" onchange="updateAppearance()">
     </div>
 
     <div id="hud">
-        <div id="player-tag">Nivel 1</div>
-        <div class="bar"><div id="hp-bar" class="hp-fill"></div></div>
-        <small>[WASD] Mover - [Click] Atacar - [I] Stats</small>
+        <div id="player-tag">Nvl 1</div>
+        <div style="width: 200px; height: 10px; background: #444; border: 1px solid #000;">
+            <div id="hp-bar" style="background: #ff3333; height: 100%; width: 100%;"></div>
+        </div>
+        <small>Presiona [I] Stats | Tienda en el centro del mapa</small>
     </div>
 
     <div id="inventory">
         <h2 style="text-align:center; color: gold;">STATS</h2>
-        <p>Nivel: <span id="st-lv">1</span></p>
         <p>Ataque: <span id="st-atk">10</span></p>
-        <p>Vida: <span id="st-hp">100/100</span></p>
+        <p>Experiencia: <span id="st-xp">0</span></p>
+        <button onclick="document.getElementById('inventory').style.display='none'">Cerrar</button>
     </div>
 
     <canvas id="game"></canvas>
@@ -79,11 +80,13 @@
         const ctx = canvas.getContext('2d');
         const peer = new Peer();
 
-        const WORLD_SIZE = 1500;
+        const WORLD_SIZE = 3000;
         let isHost = true;
         let gameActive = false;
+        let gold = 0;
+
         let myData = { 
-            id: '', x: 750, y: 750, nick: "Heroe", skin: "#ffd700", acc: "#ff0000",
+            id: '', x: 1500, y: 1500, nick: "Heroe", skin: "#ffd700", acc: "#ff0000",
             lv: 1, xp: 0, hp: 100, maxHp: 100, atk: 10, state: 'idle', frame: 0, dir: 1, angle: 0
         };
         
@@ -92,236 +95,178 @@
         let slimes = [];
         let animTimer = 0;
 
-        function startAsHost() {
-            isHost = true;
-            applyInitialSettings();
-            initGame();
-            document.getElementById('host-status').innerText = "Estado: HOST (Esperando...)";
-        }
+        // Tienda
+        const shop = { x: 1400, y: 1400, w: 200, h: 200 };
 
-        function startAsClient() {
-            const targetId = document.getElementById('join-id').value;
-            if(!targetId) return alert("Introduce el ID del Host");
-            isHost = false;
-            applyInitialSettings();
-            initGame();
-            setupConnection(peer.connect(targetId));
-        }
-
-        function applyInitialSettings() {
+        function startGame(host) {
+            isHost = host;
             myData.nick = document.getElementById('init-nick').value || "Heroe";
             myData.skin = document.getElementById('init-skin').value;
             myData.acc = document.getElementById('init-acc').value;
-            document.getElementById('live-nick').value = myData.nick;
-            document.getElementById('live-skin').value = myData.skin;
-            document.getElementById('live-acc').value = myData.acc;
-        }
-
-        function initGame() {
+            
+            if(!isHost) {
+                const tid = document.getElementById('join-id').value;
+                if(!tid) return alert("Falta ID");
+                setupConnection(peer.connect(tid));
+            }
+            
             gameActive = true;
             document.getElementById('main-menu').style.display = 'none';
             document.getElementById('game').style.display = 'block';
-            document.querySelectorAll('.ui-panel, .custom-panel, #hud').forEach(el => el.style.display = 'block');
-            if(isHost) {
-                for(let i=0; i<15; i++) {
-                    slimes.push({ id: i, x: Math.random()*WORLD_SIZE, y: Math.random()*WORLD_SIZE, hp: 40, maxHp: 40, frame: 0 });
-                }
-            }
+            document.querySelectorAll('.ui-left, .ui-right, #hud').forEach(e => e.style.display = 'block');
+            
+            if(isHost) spawnSlimes();
             render();
         }
 
-        peer.on('open', (id) => { 
-            myData.id = id; 
-            document.getElementById('my-id').innerText = id; 
-        });
+        function spawnSlimes() {
+            for(let i=0; i<30; i++) {
+                slimes.push({ id: i, x: Math.random()*WORLD_SIZE, y: Math.random()*WORLD_SIZE, hp: 50, maxHp: 50, frame: 0 });
+            }
+        }
 
-        peer.on('connection', (conn) => {
-            setupConnection(conn);
-        });
+        peer.on('open', (id) => { myData.id = id; document.getElementById('my-id').innerText = id; });
+        peer.on('connection', setupConnection);
 
         function setupConnection(conn) {
             peers[conn.peer] = conn;
-            conn.on('open', () => {
-                updatePlayerCount();
-                if(isHost) document.getElementById('host-status').innerText = "Estado: HOST (Jugadores unidos)";
-                else document.getElementById('host-status').innerText = "Estado: CLIENTE (Conectado)";
-            });
-
             conn.on('data', (data) => {
                 if (data.type === 'player_sync') remotePlayers[data.data.id] = data.data;
                 if (data.type === 'world_sync') slimes = data.slimes;
+                if (data.type === 'damage' && data.targetId === myData.id) myData.hp -= data.dmg;
                 if (data.type === 'slime_damage' && isHost) {
                     let s = slimes.find(s => s.id === data.id);
                     if(s) s.hp -= data.dmg;
                 }
             });
-
-            conn.on('close', () => {
-                delete remotePlayers[conn.peer];
-                updatePlayerCount();
-            });
+            conn.on('open', updateUI);
+            conn.on('close', () => { delete remotePlayers[conn.peer]; updateUI(); });
         }
 
-        function updatePlayerCount() {
-            const count = Object.keys(peers).length + 1;
+        function updateUI() {
+            const count = Object.keys(remotePlayers).length + 1;
             document.getElementById('player-count').innerText = `Jugadores: ${count}`;
+            let namesHTML = `<div class="player-list-item">● ${myData.nick} (Tú)</div>`;
+            for(let id in remotePlayers) namesHTML += `<div class="player-list-item">● ${remotePlayers[id].nick}</div>`;
+            document.getElementById('player-names').innerHTML = namesHTML;
         }
 
         function broadcast(msg) {
-            for(let id in peers) {
-                if(peers[id].open) peers[id].send(msg);
-            }
+            for(let id in peers) if(peers[id].open) peers[id].send(msg);
         }
 
         function updateAppearance() {
             myData.nick = document.getElementById('live-nick').value;
             myData.skin = document.getElementById('live-skin').value;
             myData.acc = document.getElementById('live-acc').value;
+            updateUI();
         }
 
+        // INPUTS
         const keys = {};
         window.onkeydown = (e) => {
             keys[e.key.toLowerCase()] = true;
-            if(e.key.toLowerCase() === 'i') {
-                const inv = document.getElementById('inventory');
-                inv.style.display = (inv.style.display === 'block') ? 'none' : 'block';
-                document.getElementById('st-hp').innerText = `${Math.ceil(myData.hp)}/${myData.maxHp}`;
-            }
+            if(e.key.toLowerCase() === 'i') document.getElementById('inventory').style.display = 'block';
         };
         window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
-
         window.onmousemove = (e) => {
-            if(!gameActive) return;
             myData.angle = Math.atan2(e.clientY - window.innerHeight/2, e.clientX - window.innerWidth/2);
             myData.dir = (e.clientX > window.innerWidth/2) ? 1 : -1;
         };
-
         window.onmousedown = () => {
-            if(!gameActive) return;
             myData.state = 'attack';
-            checkAttack();
-            setTimeout(() => { if(myData.state === 'attack') myData.state = 'idle'; }, 200);
+            doAttack();
+            setTimeout(() => myData.state = 'idle', 200);
         };
 
-        function checkAttack() {
+        function doAttack() {
+            // Ataque a Slimes
             slimes.forEach(s => {
-                let dist = Math.hypot(s.x - myData.x, s.y - myData.y);
-                let angleToSlime = Math.atan2(s.y - myData.y, s.x - myData.x);
-                let diff = Math.abs(myData.angle - angleToSlime);
-                if(dist < 75 && diff < 1.2 && s.hp > 0) {
-                    if(isHost) s.hp -= myData.atk;
+                if(s.hp <= 0) return;
+                let d = Math.hypot(s.x - myData.x, s.y - myData.y);
+                if(d < 80) {
+                    if(isHost) { s.hp -= myData.atk; if(s.hp<=0) addGold(10); }
                     else broadcast({ type: 'slime_damage', id: s.id, dmg: myData.atk });
                 }
             });
+            // ATAQUE AMIGO (PVP)
+            for(let id in remotePlayers) {
+                let p = remotePlayers[id];
+                if(Math.hypot(p.x - myData.x, p.y - myData.y) < 80) {
+                    broadcast({ type: 'damage', targetId: p.id, dmg: myData.atk });
+                }
+            }
         }
+
+        function addGold(val) { gold += val; document.getElementById('gold-val').innerText = gold; }
 
         function update() {
             if(!gameActive) return;
             let moving = false;
-            const speed = 4;
-            if (keys['w']) { myData.y -= speed; moving = true; }
-            if (keys['s']) { myData.y += speed; moving = true; }
-            if (keys['a']) { myData.x -= speed; moving = true; }
-            if (keys['d']) { myData.x += speed; moving = true; }
-
-            if (myData.state !== 'attack') myData.state = moving ? 'walk' : 'idle';
-
-            animTimer++;
-            if(animTimer > 10) {
-                myData.frame = (myData.frame + 1) % 4;
-                if(isHost) slimes.forEach(s => s.frame = (s.frame + 1) % 4);
-                animTimer = 0;
+            if (keys['w']) { myData.y -= 5; moving = true; }
+            if (keys['s']) { myData.y += 5; moving = true; }
+            if (keys['a']) { myData.x -= 5; moving = true; }
+            if (keys['d']) { myData.x += 5; moving = true; }
+            
+            // Lógica Tienda
+            if(myData.x > shop.x && myData.x < shop.x + shop.w && myData.y > shop.y && myData.y < shop.y + shop.h) {
+                if(gold >= 50) { gold -= 50; myData.atk += 5; document.getElementById('gold-val').innerText = gold; }
             }
 
-            // IA SLIMES: SOLO EL HOST LOS MUEVE
             if(isHost) {
-                const allPlayers = [myData, ...Object.values(remotePlayers)];
+                const players = [myData, ...Object.values(remotePlayers)];
                 slimes.forEach(s => {
                     if(s.hp <= 0) return;
-                    
-                    // Encontrar el jugador más cercano (Host o Clientes)
-                    let closestPlayer = null;
-                    let minDist = 200; // Radio de detección
-
-                    allPlayers.forEach(p => {
-                        let d = Math.hypot(p.x - s.x, p.y - s.y);
-                        if(d < minDist) {
-                            minDist = d;
-                            closestPlayer = p;
-                        }
-                    });
-
-                    if(closestPlayer) {
-                        s.x += (closestPlayer.x - s.x) * 0.015;
-                        s.y += (closestPlayer.y - s.y) * 0.015;
-                        if(minDist < 25 && Math.random() < 0.05) {
-                            if(closestPlayer.id === myData.id) myData.hp -= 0.5;
-                            // El host no baja la vida del cliente directamente aquí por simplicidad P2P, 
-                            // pero los slimes se verán pegados al cliente en su pantalla.
-                        }
-                    }
+                    let target = players.sort((a,b) => Math.hypot(a.x-s.x, a.y-s.y) - Math.hypot(b.x-s.x, b.y-s.y))[0];
+                    let d = Math.hypot(target.x - s.x, target.y - s.y);
+                    if(d < 250) { s.x += (target.x-s.x)*0.01; s.y += (target.y-s.y)*0.01; }
                 });
                 broadcast({ type: 'world_sync', slimes: slimes });
             }
-            
             broadcast({ type: 'player_sync', data: myData });
             document.getElementById('hp-bar').style.width = (myData.hp/myData.maxHp)*100 + "%";
-            document.getElementById('player-tag').innerText = `Nvl ${myData.lv} - ${myData.nick}`;
-            if(myData.hp <= 0) { myData.hp = 100; myData.x = 750; myData.y = 750; } // Respawn básico
+            if(myData.hp <= 0) { myData.hp = 100; myData.x = 1500; myData.y = 1500; }
         }
 
-        function drawPlayer(p) {
+        function drawEntity(x, y, hp, maxHp, nick, color, acc, angle, state, isSlime) {
             ctx.save();
-            ctx.translate(p.x, p.y);
-            let bounce = (p.state === 'walk') ? Math.sin(p.frame) * 4 : 0;
+            ctx.translate(x, y);
             
-            ctx.save();
-            ctx.scale(p.dir, 1);
-            ctx.fillStyle = p.skin;
-            ctx.fillRect(-15, -15 + bounce, 30, 30);
-            ctx.fillStyle = p.acc;
-            ctx.fillRect(-15, -2 + bounce, 30, 5); 
-            ctx.restore();
-
-            if(p.state === 'attack') {
-                ctx.save();
-                ctx.rotate(p.angle);
-                ctx.strokeStyle = "rgba(255,255,255,0.8)"; ctx.lineWidth = 4;
-                ctx.beginPath(); ctx.arc(20, 0, 35, -0.8, 0.8); ctx.stroke();
-                ctx.restore();
+            // Barra de vida
+            ctx.fillStyle = "black"; ctx.fillRect(-20, -45, 40, 6);
+            ctx.fillStyle = isSlime ? "#0f0" : "#f00"; ctx.fillRect(-20, -45, 40 * (hp/maxHp), 6);
+            
+            if(isSlime) {
+                ctx.fillStyle = "#44ff44"; ctx.beginPath(); ctx.ellipse(0, 0, 15, 12, 0, 0, Math.PI*2); ctx.fill();
+            } else {
+                ctx.fillStyle = color; ctx.fillRect(-15, -15, 30, 30);
+                ctx.fillStyle = acc; ctx.fillRect(-15, -2, 30, 5);
+                if(state === 'attack') {
+                    ctx.save(); ctx.rotate(angle); ctx.strokeStyle = "white"; ctx.lineWidth = 3;
+                    ctx.beginPath(); ctx.arc(20, 0, 30, -0.8, 0.8); ctx.stroke(); ctx.restore();
+                }
+                ctx.fillStyle = "white"; ctx.textAlign = "center"; ctx.fillText(nick, 0, -55);
             }
-
             ctx.restore();
-            ctx.fillStyle = "white"; ctx.textAlign = "center"; ctx.font = "bold 12px Arial";
-            ctx.fillText(p.nick, p.x, p.y - 35);
         }
 
         function render() {
-            if(!gameActive) return;
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const camX = canvas.width/2 - myData.x;
-            const camY = canvas.height/2 - myData.y;
-            ctx.save();
-            ctx.translate(camX, camY);
+            canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+            const camX = canvas.width/2 - myData.x; const camY = canvas.height/2 - myData.y;
+            ctx.save(); ctx.translate(camX, camY);
 
-            // Rejilla de fondo
-            ctx.strokeStyle = "rgba(255,255,255,0.03)";
-            for(let i=0; i<=WORLD_SIZE; i+=100) {
-                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, WORLD_SIZE); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(WORLD_SIZE, i); ctx.stroke();
+            // Suelo y Tienda
+            ctx.fillStyle = "rgba(255,255,255,0.05)";
+            for(let i=0; i<=WORLD_SIZE; i+=200) ctx.fillRect(i, 0, 1, WORLD_SIZE), ctx.fillRect(0, i, WORLD_SIZE, 1);
+            ctx.fillStyle = "#8b4513"; ctx.fillRect(shop.x, shop.y, shop.w, shop.h);
+            ctx.fillStyle = "white"; ctx.fillText("TIENDA (Pisa para +ATK $50)", shop.x + 10, shop.y - 10);
+
+            slimes.forEach(s => drawEntity(s.x, s.y, s.hp, s.maxHp, "", "", "", 0, "", true));
+            for(let id in remotePlayers) {
+                let p = remotePlayers[id];
+                drawEntity(p.x, p.y, p.hp, p.maxHp, p.nick, p.skin, p.acc, p.angle, p.state, false);
             }
-
-            slimes.forEach(s => {
-                if(s.hp <= 0) return;
-                ctx.fillStyle = "#44ff44";
-                ctx.beginPath(); ctx.ellipse(s.x, s.y + 10, 15, 10 + Math.sin(s.frame)*2, 0, 0, Math.PI*2); ctx.fill();
-                ctx.fillStyle = "black"; ctx.fillRect(s.x-5, s.y+5, 2, 2); ctx.fillRect(s.x+3, s.y+5, 2, 2);
-            });
-
-            for(let id in remotePlayers) drawPlayer(remotePlayers[id]);
-            drawPlayer(myData);
+            drawEntity(myData.x, myData.y, myData.hp, myData.maxHp, myData.nick, myData.skin, myData.acc, myData.angle, myData.state, false);
 
             ctx.restore();
             update();

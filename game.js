@@ -19,22 +19,35 @@ const BLOCK_TYPES = {
     3: { name: 'Piedra', col: '#9e9e9e', solid: true },
     4: { name: 'Madera', col: '#5D4037', solid: true },
     6: { name: 'Oro', col: '#ffd600', solid: true },
-    7: { name: 'Bedrock', col: '#222', solid: true } // Indestructible
+    7: { name: 'Bedrock', col: '#222', solid: true }
 };
 
-// --- INICIALIZACIÓN DE MUNDO ---
+// Función para copiar ID al portapapeles
+window.copyIdToClipboard = function() {
+    const idText = document.getElementById('display-id').innerText;
+    if (idText === "Generando...") return;
+    
+    navigator.clipboard.writeText(idText).then(() => {
+        const originalText = document.getElementById('display-id').innerText;
+        document.getElementById('display-id').innerText = "¡COPIADO!";
+        document.getElementById('display-id').style.color = "#ffffff";
+        setTimeout(() => {
+            document.getElementById('display-id').innerText = originalText;
+            document.getElementById('display-id').style.color = "#00ff00";
+        }, 1000);
+    });
+};
+
 function initWorld(type) {
     for (let x = 0; x < WORLD_SIZE; x++) {
         world[x] = [];
         for (let y = 0; y < WORLD_SIZE; y++) {
-            // Bordes de Bedrock
             if (x === 0 || x === WORLD_SIZE-1 || y === 0 || y === WORLD_SIZE-1) {
                 world[x][y] = 7;
             } else {
                 if (type === 'plano') {
-                    world[x][y] = 2; // Todo césped
+                    world[x][y] = 2;
                 } else {
-                    // Generación Procedural Simple
                     let noise = Math.sin(x*0.3) * Math.cos(y*0.3);
                     world[x][y] = noise > 0.5 ? 0 : (noise < -0.4 ? 3 : 2);
                 }
@@ -43,7 +56,6 @@ function initWorld(type) {
     }
 }
 
-// --- FUNCIONES DEL MENÚ ---
 window.startHost = function() {
     setupPlayerDetails();
     initWorld(document.getElementById('world-type').value);
@@ -78,7 +90,6 @@ function showGame() {
     update();
 }
 
-// --- SISTEMA MULTIJUGADOR ---
 function initPeer() {
     peer = new Peer();
     peer.on('open', id => {
@@ -87,7 +98,6 @@ function initPeer() {
     });
     peer.on('connection', c => {
         setupConn(c);
-        // El Host envía el mundo al nuevo jugador
         setTimeout(() => c.send({type:'world', world}), 1000);
     });
 }
@@ -100,11 +110,7 @@ function setupConn(c) {
             if(world[data.x]) world[data.x][data.y] = data.v;
         }
         if (data.type === 'world') world = data.world;
-        
-        // Si soy el host, reenvío los datos a los demás (Relay)
-        if (peer.connections[c.peer]) {
-            broadcast(data, c.peer);
-        }
+        if (peer.connections[c.peer]) broadcast(data, c.peer);
     });
 }
 
@@ -116,7 +122,6 @@ function broadcast(data, exclude = null) {
     }
 }
 
-// --- BUCLE DE JUEGO Y FÍSICA ---
 const keys = {};
 window.onkeydown = e => keys[e.code] = true;
 window.onkeyup = e => keys[e.code] = false;
@@ -130,7 +135,6 @@ function update() {
     if (keys['KeyA'] || keys['ArrowLeft']) nextX -= myPlayer.speed;
     if (keys['KeyD'] || keys['ArrowRight']) nextX += myPlayer.speed;
 
-    // Colisiones: Si el modo es Survival, bloqueamos el paso por sólidos
     if (myPlayer.mode === 'survival') {
         if (!checkSolid(nextX, myPlayer.y)) myPlayer.x = nextX;
         if (!checkSolid(myPlayer.x, nextY)) myPlayer.y = nextY;
@@ -151,7 +155,6 @@ function update() {
 }
 
 function checkSolid(px, py) {
-    // Verificamos los 4 puntos del personaje para colisión precisa
     const points = [[4, 4], [20, 4], [4, 26], [20, 26]];
     for(let p of points) {
         let gx = Math.floor((px + p[0]) / TILE_SIZE);
@@ -161,19 +164,16 @@ function checkSolid(px, py) {
     return false;
 }
 
-// --- RENDERIZADO CON CÁMARA ---
 function draw() {
     ctx.fillStyle = "#111";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // CÁMARA SEGIDORA
     let camX = Math.floor(-myPlayer.x + canvas.width/2);
     let camY = Math.floor(-myPlayer.y + canvas.height/2);
 
     ctx.save();
     ctx.translate(camX, camY);
 
-    // Dibujar Mundo Visible
     let startX = Math.max(0, Math.floor((myPlayer.x - canvas.width/2) / TILE_SIZE));
     let endX = Math.min(WORLD_SIZE, startX + Math.ceil(canvas.width / TILE_SIZE) + 1);
     let startY = Math.max(0, Math.floor((myPlayer.y - canvas.height/2) / TILE_SIZE));
@@ -185,14 +185,12 @@ function draw() {
             if (b !== undefined) {
                 ctx.fillStyle = BLOCK_TYPES[b].col;
                 ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
-                // Bordes de los bloques para estilo Grid
                 ctx.strokeStyle = "rgba(0,0,0,0.1)";
                 ctx.strokeRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
             }
         }
     }
 
-    // Dibujar Jugadores
     drawEntity(myPlayer, true);
     for (let id in otherPlayers) drawEntity(otherPlayers[id], false);
 
@@ -200,26 +198,22 @@ function draw() {
 }
 
 function drawEntity(p, isMe) {
-    // Sombra circular
     ctx.fillStyle = "rgba(0,0,0,0.2)";
     ctx.beginPath();
     ctx.ellipse(p.x+12, p.y+28, 10, 5, 0, 0, Math.PI*2);
     ctx.fill();
 
-    // Cuerpo RPG
     ctx.fillStyle = p.color;
     ctx.fillRect(p.x, p.y, 24, 30);
     ctx.strokeStyle = "white";
     if(isMe) ctx.strokeRect(p.x, p.y, 24, 30);
     
-    // Nametag
     ctx.fillStyle = isMe ? "#00ff00" : "white";
     ctx.font = "bold 13px Segoe UI";
     ctx.textAlign = "center";
     ctx.fillText(p.name, p.x + 12, p.y - 12);
 }
 
-// --- EVENTOS ---
 window.selB = function(v, el) {
     selectedBlock = v;
     document.querySelectorAll('.slot').forEach(s => s.classList.remove('selected'));
@@ -233,11 +227,9 @@ canvas.onmousedown = e => {
     let gy = Math.floor((e.clientY - camY) / TILE_SIZE);
 
     if (world[gx] && world[gx][gy] !== undefined) {
-        if (world[gx][gy] === 7) return; // No romper Bedrock
+        if (world[gx][gy] === 7) return; 
 
         let newVal = (e.button === 0) ? selectedBlock : 0;
-        
-        // Bloquear construcción dentro del propio jugador
         let myGx = Math.floor((myPlayer.x + 12) / TILE_SIZE);
         let myGy = Math.floor((myPlayer.y + 12) / TILE_SIZE);
         if (newVal !== 0 && gx === myGx && gy === myGy) return;

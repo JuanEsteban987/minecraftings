@@ -2,69 +2,124 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>2D Minecraft RPG</title>
+    <title>2D Minecraft RPG - Socket.io Edition</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #4a90e2; font-family: sans-serif; }
-        canvas { display: block; }
-        #menu-inicio { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(30, 30, 30, 0.95); padding: 30px; border: 4px solid #fff;
-            color: white; z-index: 100; text-align: center; box-shadow: 10px 10px 0px rgba(0,0,0,0.5);
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: #4a90e2; 
+            font-family: 'Courier New', Courier, monospace; 
         }
-        input { padding: 10px; margin: 10px; width: 220px; display: block; background: #000; color: #0f0; border: 1px solid #555; }
-        button { padding: 12px 24px; background: #4CAF50; color: white; border: none; cursor: pointer; font-weight: bold; width: 100%; }
-        #hotbar {
-            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-            display: flex; gap: 10px; background: rgba(0,0,0,0.6); padding: 10px; border-radius: 5px;
+        canvas { 
+            display: block; 
+            image-rendering: pixelated; 
+            cursor: crosshair;
         }
-        .slot { width: 45px; height: 45px; border: 3px solid #555; cursor: pointer; }
-        .slot.selected { border-color: #ffca28; transform: translateY(-5px); }
+        
+        /* UI Estilo RPG Panel */
+        #ui { 
+            position: absolute; 
+            top: 15px; 
+            left: 15px; 
+            background: rgba(60, 60, 60, 0.9); 
+            color: #fff; 
+            padding: 20px; 
+            border: 4px solid #1e1e1e;
+            z-index: 10;
+        }
+
+        #ui b { color: #ffca28; text-transform: uppercase; }
+        
+        input { 
+            background: #1e1e1e; 
+            border: 2px solid #555; 
+            color: #00ff00;
+            padding: 8px; 
+            margin-bottom: 8px; 
+            width: 180px; 
+            outline: none;
+        }
+
+        button { 
+            cursor: pointer; 
+            padding: 8px 12px; 
+            background: #4CAF50; 
+            color: white; 
+            border: 2px solid #2e7d32; 
+            font-weight: bold;
+            box-shadow: 3px 3px 0px #1b5e20;
+        }
+        button:active { 
+            box-shadow: 0px 0px 0px; 
+            transform: translate(3px, 3px); 
+        }
+
+        /* Hotbar Creativa */
+        #creative-menu {
+            position: absolute; 
+            bottom: 30px; 
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(40, 40, 40, 0.9);
+            padding: 8px; 
+            border: 4px solid #1e1e1e;
+            display: flex; 
+            gap: 8px;
+            z-index: 10;
+        }
+        .slot {
+            width: 54px; 
+            height: 54px; 
+            border: 4px solid #555;
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            cursor: pointer; 
+            background: #2c2c2c; 
+            transition: 0.1s;
+        }
+        .slot:hover { border-color: #aaa; }
+        .slot.selected { 
+            border-color: #ffca28; 
+            background: #444; 
+            transform: translateY(-5px); 
+        }
+        .block-preview { 
+            width: 34px; 
+            height: 34px; 
+            box-shadow: inset -4px -4px 0px rgba(0,0,0,0.3), inset 4px 4px 0px rgba(255,255,255,0.2); 
+        }
     </style>
 </head>
 <body>
 
-    <div id="menu-inicio">
-        <h2 style="color: #ffca28;">MINECRAFT 2D</h2>
-        <input type="text" id="realm-input" placeholder="Nombre del Reino" value="reino1">
-        <input type="text" id="name-input" placeholder="Tu Nombre" value="Steve">
-        <button id="btn-entrar">ENTRAR AL JUEGO</button>
+    <div id="ui">
+        <b>ID DEL MUNDO (REINO):</b> <br>
+        <span id="my-id" style="font-size: 14px; color: #00ff00;">Ninguno</span><br><br>
+        
+        <input type="text" id="peer-id-input" placeholder="NOMBRE DEL MUNDO">
+        <input type="text" id="name-input" placeholder="TU NOMBRE" onchange="updateMyName(this.value)">
+        <br>
+        <button onclick="connectToHost()">ENTRAR AL REINO</button>
+        
+        <p style="font-size: 10px; color: #bbb; margin-top: 10px;">
+            WASD para moverte<br>
+            Click Izq: Poner / Click Der: Quitar
+        </p>
     </div>
 
-    <div id="hotbar">
-        <div class="slot selected" style="background:#795548" data-id="1"></div>
-        <div class="slot" style="background:#4CAF50" data-id="2"></div>
-        <div class="slot" style="background:#9e9e9e" data-id="3"></div>
-        <div class="slot" style="background:#5D4037" data-id="4"></div>
-        <div class="slot" style="background:#ffd600" data-id="6"></div>
+    <div id="creative-menu">
+        <div class="slot selected" onclick="selectBlock(1, this)"><div class="block-preview" style="background:#795548"></div></div>
+        <div class="slot" onclick="selectBlock(2, this)"><div class="block-preview" style="background:#4CAF50"></div></div>
+        <div class="slot" onclick="selectBlock(3, this)"><div class="block-preview" style="background:#9e9e9e"></div></div>
+        <div class="slot" onclick="selectBlock(4, this)"><div class="block-preview" style="background:#5D4037"></div></div>
+        <div class="slot" onclick="selectBlock(5, this)"><div class="block-preview" style="background:#2e7d32"></div></div>
+        <div class="slot" onclick="selectBlock(6, this)"><div class="block-preview" style="background:#ffd600"></div></div>
     </div>
 
     <canvas id="gameCanvas"></canvas>
 
     <script src="game.js"></script>
-
-    <script>
-        // Manejo de la hotbar
-        document.querySelectorAll('.slot').forEach(slot => {
-            slot.onclick = function() {
-                window.selectedBlock = parseInt(this.dataset.id);
-                document.querySelectorAll('.slot').forEach(s => s.classList.remove('selected'));
-                this.classList.add('selected');
-            };
-        });
-
-        // Manejo del botón entrar
-        document.getElementById('btn-entrar').onclick = function() {
-            const reino = document.getElementById('realm-input').value;
-            const nombre = document.getElementById('name-input').value;
-            
-            if (window.funcionesJuego && window.funcionesJuego.unirse) {
-                window.funcionesJuego.unirse(reino, nombre);
-                document.getElementById('menu-inicio').style.display = 'none';
-            } else {
-                alert("El archivo game.js aún no ha cargado. Espera un segundo.");
-            }
-        };
-    </script>
 </body>
 </html>

@@ -2,60 +2,89 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>2D Minecraft RPG - Deluxe P2P</title>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Minecraft RPG - Cámara Corregida</title>
+    <script src="/socket.io/socket.io.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #4a90e2; font-family: 'Courier New', Courier, monospace; }
-        canvas { display: block; image-rendering: pixelated; }
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: #4a90e2; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        }
+        canvas { 
+            display: block; 
+            image-rendering: pixelated; 
+        }
         
-        /* UI Estilo RPG Panel */
+        /* UI Estilo Panel */
         #ui { 
             position: absolute; top: 15px; left: 15px; 
-            background: #3c3c3c; color: #fff; 
-            padding: 20px; border: 4px solid #1e1e1e;
-            border-radius: 0px; box-shadow: 6px 6px 0px rgba(0,0,0,0.4);
+            background: rgba(60, 60, 60, 0.9); color: #fff; 
+            padding: 15px; border: 4px solid #1e1e1e;
             z-index: 10;
         }
 
-        #ui b { color: #ffca28; text-transform: uppercase; }
+        #ui b { color: #ffca28; font-size: 12px; }
         
         input { 
             background: #1e1e1e; border: 2px solid #555; color: #00ff00;
-            padding: 8px; margin-bottom: 8px; width: 180px; outline: none;
+            padding: 8px; margin-top: 5px; width: 150px; outline: none;
+            display: block;
         }
 
         button { 
             cursor: pointer; padding: 8px 12px; background: #4CAF50; 
             color: white; border: 2px solid #2e7d32; font-weight: bold;
-            box-shadow: 3px 3px 0px #1b5e20;
+            margin-top: 10px; width: 100%;
         }
-        button:active { box-shadow: 0px 0px 0px; transform: translate(3px, 3px); }
+        button:active { transform: translateY(2px); }
 
-        /* Hotbar Creativa */
+        /* Hotbar de Bloques */
         #creative-menu {
             position: absolute; bottom: 30px; left: 50%;
             transform: translateX(-50%);
             background: rgba(40, 40, 40, 0.9);
             padding: 8px; border: 4px solid #1e1e1e;
             display: flex; gap: 8px;
+            z-index: 10;
         }
         .slot {
-            width: 54px; height: 54px; border: 4px solid #555;
+            width: 50px; height: 50px; border: 4px solid #555;
             display: flex; align-items: center; justify-content: center;
-            cursor: pointer; background: #2c2c2c; transition: 0.1s;
+            cursor: pointer; background: #2c2c2c;
         }
         .slot:hover { border-color: #aaa; }
-        .slot.selected { border-color: #ffca28; background: #444; transform: translateY(-5px); }
-        .block-preview { width: 34px; height: 34px; box-shadow: inset -4px -4px 0px rgba(0,0,0,0.3), inset 4px 4px 0px rgba(255,255,255,0.2); }
+        .slot.selected { border-color: #ffca28; background: #444; }
+        
+        .block-preview { 
+            width: 30px; height: 30px; 
+            box-shadow: inset -3px -3px 0px rgba(0,0,0,0.3); 
+        }
+
+        #instrucciones {
+            position: absolute; top: 15px; right: 15px;
+            color: white; background: rgba(0,0,0,0.5);
+            padding: 10px; font-size: 12px; pointer-events: none;
+        }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        <b>ID DEL MUNDO:</b> <br><span id="my-id" style="font-size: 10px; color: #00ff00;">...</span><br><br>
-        <input type="text" id="peer-id-input" placeholder="ID DEL HOST">
-        <button onclick="connectToHost()">CONECTAR</button><br><br>
-        <input type="text" id="name-input" placeholder="NOMBRE" onchange="updateMyName(this.value)">
+        <b>REINO (CÓDIGO):</b>
+        <input type="text" id="realm-input" placeholder="Ej: mi-mundo-1">
+        
+        <b>TU NOMBRE:</b>
+        <input type="text" id="name-input" placeholder="Jugador 1">
+        
+        <button id="btn-conectar">ENTRAR AL MUNDO</button>
+    </div>
+
+    <div id="instrucciones">
+        WASD: Moverse<br>
+        Click Izq: Poner Bloque<br>
+        Click Der: Borrar Bloque
     </div>
 
     <div id="creative-menu">
@@ -68,6 +97,27 @@
     </div>
 
     <canvas id="gameCanvas"></canvas>
+
     <script src="game.js"></script>
+
+    <script>
+        // Lógica de selección visual de la hotbar
+        function selectBlock(id, element) {
+            window.selectedBlock = id; // Cambia la variable global en game.js
+            document.querySelectorAll('.slot').forEach(s => s.classList.remove('selected'));
+            element.classList.add('selected');
+        }
+
+        // Manejo del botón de conexión
+        document.getElementById('btn-conectar').onclick = function() {
+            const codigo = document.getElementById('realm-input').value || "provisional";
+            const nombre = document.getElementById('name-input').value || "Invitado";
+            
+            if (window.conectarAlReino) {
+                window.conectarAlReino(codigo, nombre);
+                document.getElementById('ui').style.display = 'none'; // Ocultar UI al entrar
+            }
+        };
+    </script>
 </body>
 </html>

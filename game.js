@@ -1,210 +1,188 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-
-// --- AJUSTES DE PANTALLA ---
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-// --- CONFIGURACIÓN DE JUEGO ---
-const TILE_SIZE = 40;
-const GRAVITY = 0.5;
-const SPEED = 4;
-const JUMP_FORCE = -10;
+// --- CONFIGURACIÓN ---
+const TILE_SIZE = 32;
+const GRAVITY = 0.4;
+const WORLD_WIDTH = 200; // Mundo mucho más grande
+const WORLD_HEIGHT = 40;
+let selectedBlockType = 1;
 
-let world = [];
-const worldWidth = 100;
-const worldHeight = 30;
-
-// Datos del Jugador Local
-let myPlayer = {
-    id: null,
-    x: 200, y: 100,
-    vx: 0, vy: 0,
-    color: '#' + Math.floor(Math.random()*16777215).toString(16)
+// Bloques: 0:Aire, 1:Tierra, 2:Césped, 3:Piedra, 4:Madera, 5:Hojas, 6:Oro
+const BLOCK_COLORS = {
+    1: '#5d4037', 2: '#4CAF50', 3: '#808080', 
+    4: '#5D4037', 5: '#228B22', 6: '#FFD700'
 };
 
-let otherPlayers = {}; // Lista de jugadores conectados
-const keys = {}; // Estado del teclado
+let world = [];
+let myPlayer = {
+    id: null, name: "Steve", x: 500, y: 100, vx: 0, vy: 0,
+    color: '#' + Math.floor(Math.random()*16777215).toString(16)
+};
+let otherPlayers = {};
 
-// --- GENERACIÓN INICIAL DEL MUNDO ---
-for (let x = 0; x < worldWidth; x++) {
-    world[x] = [];
-    for (let y = 0; y < worldHeight; y++) {
-        // Generar suelo y una pequeña colina aleatoria
-        world[x][y] = (y > 15 + Math.sin(x*0.5)*2) ? 1 : 0;
+// --- GENERACIÓN DE MUNDO ---
+function initWorld() {
+    for (let x = 0; x < WORLD_WIDTH; x++) {
+        world[x] = [];
+        let groundLevel = 20 + Math.floor(Math.sin(x * 0.1) * 3);
+        for (let y = 0; y < WORLD_HEIGHT; y++) {
+            if (y > groundLevel + 4) world[x][y] = 3; // Piedra
+            else if (y > groundLevel) world[x][y] = 1; // Tierra
+            else if (y === groundLevel) world[x][y] = 2; // Césped
+            else world[x][y] = 0;
+        }
+        // Generar Árboles aleatorios
+        if (x % 15 === 0 && x > 5) {
+            createTree(x, groundLevel - 1);
+        }
     }
 }
 
-// --- LÓGICA DE RED (PEERJS) ---
+function createTree(x, y) {
+    for(let i=0; i<4; i++) if(world[x] && y-i >= 0) world[x][y-i] = 4; // Tronco
+    // Hojas
+    for(let ix=-1; ix<=1; ix++){
+        for(let iy=-4; iy<=-2; iy++){
+            if(world[x+ix] && y+iy >= 0) world[x+ix][y+iy] = 5;
+        }
+    }
+}
+initWorld();
+
+// --- MULTIJUGADOR (PEERJS) ---
 const peer = new Peer();
-
-peer.on('open', (id) => {
-    myPlayer.id = id;
-    document.getElementById('my-id').innerText = id;
+peer.on('open', id => { 
+    myPlayer.id = id; 
+    document.getElementById('my-id').innerText = id; 
 });
 
-// Cuando alguien se conecta a nosotros (Actuamos como Host)
-peer.on('connection', (conn) => {
-    setupConnection(conn);
-    // Enviar el mapa actual al nuevo jugador después de un segundo
-    setTimeout(() => {
-        conn.send({ type: 'init_world', world: world });
-    }, 1000);
+peer.on('connection', conn => {
+    conn.on('data', data => handleData(data, conn));
+    setTimeout(() => conn.send({type:'world', world: world}), 1000);
 });
 
-// Función para unirse a un Host existente
 function connectToHost() {
     const hostId = document.getElementById('peer-id-input').value;
     const conn = peer.connect(hostId);
-    setupConnection(conn);
+    conn.on('data', data => handleData(data, conn));
 }
 
-function setupConnection(conn) {
-    conn.on('data', (data) => {
-        if (data.type === 'pos') {
-            otherPlayers[data.id] = data;
-        } else if (data.type === 'block') {
-            if(world[data.x]) world[data.x][data.y] = data.v;
-        } else if (data.type === 'init_world') {
-            world = data.world;
-        }
-    });
+function handleData(data, conn) {
+    if (data.type === 'pos') otherPlayers[data.id] = data;
+    if (data.type === 'world') world = data.world;
+    if (data.type === 'block') world[data.x][data.y] = data.v;
+    
+    // Relay si eres host
+    if (peer.connections[conn.peer]) {
+        broadcast(data, conn.peer);
+    }
 }
 
-function broadcast(data) {
-    // Enviamos nuestros datos a todos los nodos conectados
-    for (let conns in peer.connections) {
-        peer.connections[conns].forEach(c => {
-            if (c.open) c.send(data);
+function broadcast(data, exclude = null) {
+    for (let id in peer.connections) {
+        peer.connections[id].forEach(c => {
+            if (c.open && c.peer !== exclude) c.send(data);
         });
     }
 }
 
-// --- FÍSICA Y COLISIONES ---
-function checkCollision(px, py) {
-    // Calculamos los bordes del jugador en la rejilla (grid)
-    let gx = Math.floor((px + 5) / TILE_SIZE);
-    let gy = Math.floor((py + 39) / TILE_SIZE);
-    
-    if (world[gx] && world[gx][gy] === 1) return true;
-    
-    // Check lado derecho
-    let gxRight = Math.floor((px + 25) / TILE_SIZE);
-    if (world[gxRight] && world[gxRight][gy] === 1) return true;
-    
-    return false;
-}
-
-function isGrounded() {
-    return checkCollision(myPlayer.x, myPlayer.y + 2);
-}
-
-// --- BUCLE PRINCIPAL ---
+// --- JUEGO ---
 function update() {
-    // Movimiento Horizontal
-    if (keys['KeyA'] || keys['ArrowLeft']) myPlayer.vx = -SPEED;
-    else if (keys['KeyD'] || keys['ArrowRight']) myPlayer.vx = SPEED;
+    // Física
+    myPlayer.vy += GRAVITY;
+    if (keys['KeyA']) myPlayer.vx = -4;
+    else if (keys['KeyD']) myPlayer.vx = 4;
     else myPlayer.vx = 0;
 
-    // Salto
-    if ((keys['Space'] || keys['ArrowUp'] || keys['KeyW']) && isGrounded()) {
-        myPlayer.vy = JUMP_FORCE;
-    }
+    if (keys['Space'] && isGrounded()) myPlayer.vy = -8;
 
-    // Gravedad
-    myPlayer.vy += GRAVITY;
-    
-    // Aplicar movimiento con validación de colisión
-    if (!checkCollision(myPlayer.x + myPlayer.vx, myPlayer.y)) {
-        myPlayer.x += myPlayer.vx;
-    }
-    
+    // Colisiones
+    if (!checkCollision(myPlayer.x + myPlayer.vx, myPlayer.y)) myPlayer.x += myPlayer.vx;
     if (!checkCollision(myPlayer.x, myPlayer.y + myPlayer.vy)) {
         myPlayer.y += myPlayer.vy;
-    } else {
-        myPlayer.vy = 0; // Detener caída al tocar suelo
-    }
+    } else { myPlayer.vy = 0; }
 
-    // Limites del canvas
-    myPlayer.x = Math.max(0, Math.min(myPlayer.x, (worldWidth * TILE_SIZE) - 30));
-
-    // Notificar posición
-    if (myPlayer.id) {
-        broadcast({ 
-            type: 'pos', 
-            id: myPlayer.id, 
-            x: myPlayer.x, 
-            y: myPlayer.y, 
-            color: myPlayer.color 
-        });
-    }
+    broadcast({
+        type: 'pos', id: myPlayer.id, name: myPlayer.name,
+        x: myPlayer.x, y: myPlayer.y, color: myPlayer.color
+    });
 
     draw();
     requestAnimationFrame(update);
 }
 
-// --- RENDERIZADO ---
+function checkCollision(px, py) {
+    let gx = Math.floor((px + 8) / TILE_SIZE);
+    let gy = Math.floor((py + 31) / TILE_SIZE);
+    return world[gx] && world[gx][gy] > 0;
+}
+
+function isGrounded() { return checkCollision(myPlayer.x, myPlayer.y + 2); }
+
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Cámara simple (centrada en jugador)
+    let camX = -myPlayer.x + canvas.width/2;
+    ctx.save();
+    ctx.translate(camX, 0);
 
-    // Dibujar Mundo (Bloques)
-    for (let x = 0; x < worldWidth; x++) {
-        for (let y = 0; y < worldHeight; y++) {
-            if (world[x][y] === 1) {
-                ctx.fillStyle = '#5d4037'; // Marrón tierra
+    // Dibujar Mundo
+    for (let x = 0; x < WORLD_WIDTH; x++) {
+        for (let y = 0; y < WORLD_HEIGHT; y++) {
+            if (world[x][y] > 0) {
+                ctx.fillStyle = BLOCK_COLORS[world[x][y]];
                 ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-                ctx.strokeStyle = '#3e2723';
-                ctx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
             }
         }
     }
 
-    // Dibujar Otros Jugadores
-    for (let id in otherPlayers) {
-        let p = otherPlayers[id];
-        ctx.fillStyle = p.color;
-        ctx.globalAlpha = 0.7;
-        ctx.fillRect(p.x, p.y, 30, 40);
-        ctx.globalAlpha = 1.0;
-    }
+    // Dibujar Jugadores (Local y Otros)
+    drawPlayer(myPlayer);
+    for (let id in otherPlayers) drawPlayer(otherPlayers[id]);
 
-    // Dibujar Jugador Local
-    ctx.fillStyle = myPlayer.color;
-    ctx.fillRect(myPlayer.x, myPlayer.y, 30, 40);
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(myPlayer.x, myPlayer.y, 30, 40);
+    ctx.restore();
 }
 
-// --- INPUTS ---
-window.onkeydown = (e) => keys[e.code] = true;
-window.onkeyup = (e) => keys[e.code] = false;
+function drawPlayer(p) {
+    // Skin (Cuerpo)
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x, p.y, 20, 32);
+    // Cabeza
+    ctx.fillStyle = '#ffdbac';
+    ctx.fillRect(p.x + 2, p.y - 10, 16, 16);
+    // Nametag
+    ctx.fillStyle = "white";
+    ctx.font = "12px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(p.name || "Jugador", p.x + 10, p.y - 15);
+}
 
-canvas.onmousedown = (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-    
-    const x = Math.floor(mouseX / TILE_SIZE);
-    const y = Math.floor(mouseY / TILE_SIZE);
-    
-    // Izquierdo (0) pone bloque, Derecho (2) quita
-    const val = (e.button === 0) ? 1 : 0;
-    
-    if (world[x]) {
-        world[x][y] = val;
-        broadcast({ type: 'block', x: x, y: y, v: val, id: myPlayer.id });
+// --- INPUTS & UI ---
+const keys = {};
+window.onkeydown = e => keys[e.code] = true;
+window.onkeyup = e => keys[e.code] = false;
+
+function updateMyName(val) { myPlayer.name = val; }
+function selectBlock(type, el) {
+    selectedBlockType = type;
+    document.querySelectorAll('.slot').forEach(s => s.classList.remove('selected'));
+    el.classList.add('selected');
+}
+
+canvas.onmousedown = e => {
+    let camX = -myPlayer.x + canvas.width/2;
+    let gx = Math.floor((e.clientX - camX) / TILE_SIZE);
+    let gy = Math.floor(e.clientY / TILE_SIZE);
+    let val = (e.button === 0) ? selectedBlockType : 0;
+    if(world[gx]) {
+        world[gx][gy] = val;
+        broadcast({type:'block', x:gx, y:gy, v:val, id:myPlayer.id});
     }
 };
+canvas.oncontextmenu = e => e.preventDefault();
 
-// Desactivar menú contextual del click derecho
-canvas.oncontextmenu = (e) => e.preventDefault();
-
-// Ajuste de ventana
-window.onresize = () => {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-};
-
-// Iniciar juego
 update();

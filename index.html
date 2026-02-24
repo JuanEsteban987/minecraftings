@@ -2,79 +2,159 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>RPG 2D - Versión Final</title>
+    <title>RPG REINOS: Minecraft 2D Final</title>
     <style>
-        body { margin: 0; background: #4a7023; overflow: hidden; font-family: sans-serif; }
-        canvas { display: block; image-rendering: pixelated; }
-        #gui {
-            position: absolute; top: 10px; left: 10px;
-            background: rgba(0,0,0,0.7); color: white;
-            padding: 15px; border-radius: 8px; pointer-events: none;
+        body { margin: 0; background: #1a1a1a; overflow: hidden; font-family: 'Segoe UI', Tahoma, sans-serif; color: white; }
+        
+        /* PANTALLA DE INICIO */
+        #menu-container {
+            position: absolute; width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            background: #2c3e50; z-index: 100;
         }
+        .panel {
+            background: #34495e; padding: 40px; border-radius: 20px;
+            border: 4px solid #f1c40f; text-align: center; box-shadow: 0 0 30px rgba(0,0,0,0.7);
+        }
+        h1 { color: #f1c40f; font-size: 32px; margin-bottom: 20px; text-transform: uppercase; }
+        input { padding: 12px; width: 250px; border-radius: 8px; border: none; margin: 10px 0; font-size: 16px; }
+        button {
+            padding: 15px 30px; background: #27ae60; color: white; border: none;
+            border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 18px; margin-top: 15px;
+        }
+        button:hover { background: #2ecc71; transform: scale(1.05); }
+
+        /* INTERFAZ DE JUEGO */
+        #game-ui {
+            display: none; position: absolute; top: 15px; left: 15px;
+            background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px; border-left: 5px solid #f1c40f;
+        }
+        canvas { display: none; image-rendering: pixelated; background: #4a7023; }
+        .stat { color: #bdc3c7; font-size: 14px; }
+        b { color: #f1c40f; }
     </style>
 </head>
 <body>
-    <div id="gui">
-        <strong>CONTROLES:</strong><br>
-        Moverse: <b style="color: #ffeb3b;">WASD</b> (Bloque a bloque)<br>
-        Acción: <b style="color: #ffeb3b;">CLICK</b> (Ataca y pone bloque)
+
+    <div id="menu-container">
+        <div class="panel">
+            <h1>🏰 CREAR REINO RPG</h1>
+            <input type="text" id="username" placeholder="Nombre de tu Héroe" maxlength="10">
+            <br>
+            <input type="text" id="reino-name" placeholder="Nombre del Reino">
+            <br>
+            <button onclick="iniciarJuego()">ENTRAR AL REINO</button>
+        </div>
     </div>
-    <canvas id="game"></canvas>
+
+    <div id="game-ui">
+        <div class="stat">REINO: <b id="ui-reino"></b></div>
+        <div class="stat">HÉROE: <b id="ui-name"></b></div>
+        <div class="stat">ZONA: <b id="ui-zona">Bosque</b></div>
+        <div class="stat" style="margin-top:5px; font-size:11px;">CLICK: Atacar/Construir | WASD: Mover</div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
 
     <script>
-        const canvas = document.getElementById("game");
+        const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
-
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-
-        const TILE = 40; // Tamaño del bloque
-        const world = {}; // Almacena los bloques
+        const TILE = 40;
+        
+        let gameActive = false;
+        let world = {};
+        let enemies = [];
         
         const player = {
-            x: TILE * 2,
-            y: TILE * 2,
-            color: "#3498db",
-            name: "JUGADOR 1",
-            isAttacking: false
+            x: TILE * 5, y: TILE * 5,
+            name: "", reino: "",
+            color: "#3498db", attacking: false
         };
 
-        // Movimiento por rejilla (Grid-based)
-        window.addEventListener('keydown', (e) => {
-            const key = e.key.toLowerCase();
-            if (key === 'w') player.y -= TILE;
-            if (key === 's') player.y += TILE;
-            if (key === 'a') player.x -= TILE;
-            if (key === 'd') player.x += TILE;
+        // ZONAS (Colores de fondo por coordenadas)
+        function getZona(x, y) {
+            if (x < 800) return { nombre: "Bosque Verde", color: "#4a7023" };
+            if (x < 1600) return { nombre: "Desierto Maldito", color: "#d4a373" };
+            return { nombre: "Tierras Sombrías", color: "#2c3e50" };
+        }
+
+        function iniciarJuego() {
+            const u = document.getElementById("username").value;
+            const r = document.getElementById("reino-name").value;
+            if(!u || !r) return alert("Completa los campos");
+
+            player.name = u.toUpperCase();
+            player.reino = r.toUpperCase();
             
-            // Límites de pantalla
-            player.x = Math.max(0, Math.min(player.x, canvas.width - TILE));
-            player.y = Math.max(0, Math.min(player.y, canvas.height - TILE));
-        });
+            document.getElementById("ui-name").innerText = player.name;
+            document.getElementById("ui-reino").innerText = player.reino;
+            document.getElementById("menu-container").style.display = "none";
+            document.getElementById("game-ui").style.display = "block";
+            canvas.style.display = "block";
 
-        // Ataque y Construcción
-        window.addEventListener('mousedown', (e) => {
-            // Activar arma
-            player.isAttacking = true;
-            setTimeout(() => player.isAttacking = false, 150);
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
 
-            // Coordenadas de la rejilla
-            const gx = Math.floor(e.clientX / TILE);
-            const gy = Math.floor(e.clientY / TILE);
-            const key = `${gx},${gy}`;
-
-            // Si hay bloque lo quita, si no, pone uno
-            if (world[key]) {
-                delete world[key];
-            } else {
-                world[key] = "#5d4037"; // Color tierra
+            // Crear algunos enemigos iniciales
+            for(let i=0; i<5; i++) {
+                enemies.push({
+                    x: Math.random() * 1000 + 400,
+                    y: Math.random() * 600,
+                    color: "#e74c3c"
+                });
             }
+
+            gameActive = true;
+            run();
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if(!gameActive) return;
+            let nx = player.x, ny = player.y;
+            const k = e.key.toLowerCase();
+            if (k === 'w') ny -= TILE;
+            if (k === 's') ny += TILE;
+            if (k === 'a') nx -= TILE;
+            if (k === 'd') nx += TILE;
+
+            // Colisión con bloques y límites
+            if (!world[`${Math.floor(nx/TILE)},${Math.floor(ny/TILE)}`]) {
+                player.x = nx; player.y = ny;
+            }
+            
+            // Actualizar zona en UI
+            document.getElementById("ui-zona").innerText = getZona(player.x, player.y).nombre;
         });
 
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        window.addEventListener('mousedown', () => {
+            if(!gameActive) return;
+            player.attacking = true;
+            
+            // Lógica de ataque a enemigos
+            enemies = enemies.filter(en => {
+                const dist = Math.hypot(en.x - (player.x + TILE), en.y - player.y);
+                return dist > 60; // Si está cerca de la espada, muere
+            });
 
-            // 1. Dibujar el mundo (bloques)
+            // Construir bloque
+            const gx = Math.floor(window.event.clientX / TILE);
+            const gy = Math.floor(window.event.clientY / TILE);
+            const key = `${gx},${gy}`;
+            if(world[key]) delete world[key];
+            else world[key] = "#7f8c8d";
+
+            setTimeout(() => player.attacking = false, 150);
+        });
+
+        function run() {
+            if(!gameActive) return;
+            const zona = getZona(player.x, player.y);
+            
+            // Dibujar Fondo de Zona
+            ctx.fillStyle = zona.color;
+            ctx.fillRect(0,0, canvas.width, canvas.height);
+
+            // Dibujar Bloques
             for (let key in world) {
                 const [x, y] = key.split(',').map(Number);
                 ctx.fillStyle = world[key];
@@ -83,31 +163,38 @@
                 ctx.strokeRect(x * TILE, y * TILE, TILE, TILE);
             }
 
-            // 2. Dibujar Nametag
-            ctx.fillStyle = "white";
-            ctx.font = "bold 14px Arial";
-            ctx.textAlign = "center";
-            ctx.fillText(player.name, player.x + TILE/2, player.y - 12);
+            // Dibujar Enemigos y seguir al jugador
+            enemies.forEach(en => {
+                if (Math.random() > 0.98) { // Movimiento lento de persecución
+                    if(en.x < player.x) en.x += 2; else en.x -= 2;
+                    if(en.y < player.y) en.y += 2; else en.y -= 2;
+                }
+                ctx.fillStyle = en.color;
+                ctx.fillRect(en.x, en.y, TILE-10, TILE-10);
+                ctx.fillStyle = "white";
+                ctx.fillText("¡MONSTRUO!", en.x + 15, en.y - 5);
+            });
 
-            // 3. Dibujar Jugador
+            // Dibujar Jugador
             ctx.fillStyle = player.color;
             ctx.fillRect(player.x, player.y, TILE, TILE);
-            ctx.strokeStyle = "black";
-            ctx.lineWidth = 2;
-            ctx.strokeRect(player.x, player.y, TILE, TILE);
+            
+            // Nametag
+            ctx.fillStyle = "white";
+            ctx.font = "bold 12px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(player.name, player.x + TILE/2, player.y - 10);
 
-            // 4. Dibujar Arma (Solo si está atacando)
-            if (player.isAttacking) {
-                ctx.fillStyle = "#dfe6e9"; // Hoja de la espada
-                ctx.fillRect(player.x + TILE - 5, player.y + 15, 25, 8);
-                ctx.fillStyle = "#2d3436"; // Mango
-                ctx.fillRect(player.x + TILE - 5, player.y + 12, 5, 14);
+            // ARMA (Espada de Reino)
+            if (player.attacking) {
+                ctx.fillStyle = "#f1c40f"; // Color Oro
+                ctx.fillRect(player.x + TILE, player.y + 15, 30, 8); // Hoja
+                ctx.fillStyle = "#8e44ad"; // Mango
+                ctx.fillRect(player.x + TILE, player.y + 10, 6, 18);
             }
 
-            requestAnimationFrame(draw);
+            requestAnimationFrame(run);
         }
-
-        draw();
     </script>
 </body>
 </html>

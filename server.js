@@ -7,34 +7,33 @@ const io = new Server(server);
 
 app.use(express.static(__dirname));
 
-let reinos = {}; // Almacena { codigo: { jugadores: {}, mundo: {} } }
+let reinos = {}; 
 
 io.on('connection', (socket) => {
     socket.on('unirseReino', (data) => {
         const { codigo, nombre } = data;
-        socket.join(codigo);
+        const roomCode = codigo.toUpperCase();
+        socket.join(roomCode);
 
-        if (!reinos[codigo]) {
-            reinos[codigo] = { jugadores: {}, mundo: {} };
+        if (!reinos[roomCode]) {
+            reinos[roomCode] = { jugadores: {}, mundo: {} };
         }
 
-        reinos[codigo].jugadores[socket.id] = {
-            x: 80, y: 80,
+        reinos[roomCode].jugadores[socket.id] = {
+            x: 120, y: 120,
             nombre: nombre,
             color: `hsl(${Math.random() * 360}, 70%, 50%)`,
             attacking: false
         };
 
-        // Enviar estado actual del reino
         socket.emit('init', { 
             id: socket.id, 
-            jugadores: reinos[codigo].jugadores, 
-            mundo: reinos[codigo].mundo 
+            jugadores: reinos[roomCode].jugadores, 
+            mundo: reinos[roomCode].mundo 
         });
 
-        // Avisar a otros en el reino
-        socket.to(codigo).emit('nuevoJugador', { id: socket.id, info: reinos[codigo].jugadores[socket.id] });
-        socket.codigoReino = codigo;
+        socket.to(roomCode).emit('nuevoJugador', { id: socket.id, info: reinos[roomCode].jugadores[socket.id] });
+        socket.codigoReino = roomCode;
     });
 
     socket.on('move', (data) => {

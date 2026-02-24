@@ -2,23 +2,26 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>RPG P2P: Sincronización Total</title>
+    <title>RPG P2P: Menú & Mouse Aim</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         body { font-family: 'Courier New', monospace; margin: 0; overflow: hidden; background: #1a1a1a; color: white; }
-        canvas { background: #2d5a27; display: block; }
+        canvas { background: #2d5a27; display: none; } /* Oculto hasta empezar */
         
-        /* Paneles UI */
-        .ui-panel { position: absolute; top: 10px; left: 10px; z-index: 10; padding: 10px; background: rgba(0,0,0,0.8); border: 2px solid #555; font-size: 12px; }
-        
-        /* NUEVO: Menú de Ropa y Personalización en la esquina derecha */
-        .custom-panel { position: absolute; top: 10px; right: 10px; z-index: 10; padding: 15px; background: rgba(40, 40, 40, 0.9); border: 3px solid #8b4513; width: 180px; }
-        .custom-panel h4 { margin: 0 0 10px 0; color: #ffd700; text-align: center; }
-        .item-row { margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
-        .item-row input[type="color"] { border: none; width: 30px; height: 20px; cursor: pointer; }
-        .item-row input[type="text"] { width: 80px; background: #111; color: #0f0; border: 1px solid #555; padding: 2px; }
+        /* MENU PRINCIPAL */
+        #main-menu {
+            position: absolute; width: 100%; height: 100%; background: radial-gradient(#2d5a27, #1a1a1a);
+            display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100;
+        }
+        .menu-box { background: rgba(0,0,0,0.8); padding: 30px; border: 4px solid #8b4513; border-radius: 15px; text-align: center; }
+        .menu-box input, .menu-box button, .menu-box select { margin: 10px; padding: 10px; font-size: 16px; border-radius: 5px; border: none; }
+        .menu-box button { cursor: pointer; background: #ffd700; font-weight: bold; }
+        .menu-box button:hover { background: #fff; }
 
-        #hud { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); text-align: center; pointer-events: none; }
+        /* UI JUEGO */
+        .ui-panel { position: absolute; top: 10px; left: 10px; z-index: 10; padding: 10px; background: rgba(0,0,0,0.8); border: 2px solid #555; display: none; }
+        .custom-panel { position: absolute; top: 10px; right: 10px; z-index: 10; padding: 15px; background: rgba(40, 40, 40, 0.9); border: 3px solid #8b4513; width: 180px; display: none; }
+        #hud { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); text-align: center; pointer-events: none; display: none; }
         .bar { width: 200px; height: 10px; background: #444; border: 1px solid #000; margin: 5px; }
         .hp-fill { background: #ff3333; height: 100%; width: 100%; transition: width 0.2s; }
         #inventory { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 250px; background: #333; border: 4px solid #8b4513; padding: 20px; display: none; z-index: 20; }
@@ -26,33 +29,41 @@
 </head>
 <body>
 
-    <div class="ui-panel">
-        ID: <span id="my-id" style="color:#0f0">...</span><br>
-        <input type="text" id="target-id" placeholder="ID Amigo" style="width: 100px;">
-        <button onclick="connectToPeer()">Conectar</button>
-        <div id="host-status" style="font-size: 9px; color: #aaa; margin-top:5px;">Iniciando...</div>
+    <div id="main-menu">
+        <div class="menu-box">
+            <h1 style="color: #ffd700;">2D P2P RPG</h1>
+            <div>
+                <input type="text" id="init-nick" placeholder="Tu Nombre" maxlength="10">
+            </div>
+            <div>
+                Ropa: <input type="color" id="init-skin" value="#ffd700">
+                Acc: <input type="color" id="init-acc" value="#ff0000">
+            </div>
+            <hr>
+            <button onclick="startAsHost()">CREAR SALA (HOST)</button>
+            <div style="margin-top: 20px;">
+                <input type="text" id="join-id" placeholder="ID de la sala">
+                <button onclick="startAsClient()">UNIRSE</button>
+            </div>
+        </div>
     </div>
 
-    <div class="custom-panel">
+    <div class="ui-panel" id="panel-left">
+        ID Sala: <span id="my-id" style="color:#0f0">...</span><br>
+        <div id="host-status">Estado: Iniciando...</div>
+    </div>
+
+    <div class="custom-panel" id="panel-right">
         <h4>PERSONALIZAR</h4>
-        <div class="item-row">
-            <span>Nombre:</span>
-            <input type="text" id="change-nick" value="Heroe" maxlength="10" oninput="updateAppearance()">
-        </div>
-        <div class="item-row">
-            <span>Ropa:</span>
-            <input type="color" id="change-skin" value="#ffd700" onchange="updateAppearance()">
-        </div>
-        <div class="item-row">
-            <span>Accesorio:</span>
-            <input type="color" id="change-acc" value="#ff0000" onchange="updateAppearance()">
-        </div>
+        <input type="text" id="live-nick" oninput="updateAppearance()" placeholder="Nick" style="width:100%">
+        <input type="color" id="live-skin" onchange="updateAppearance()">
+        <input type="color" id="live-acc" onchange="updateAppearance()">
     </div>
 
     <div id="hud">
         <div id="player-tag">Nivel 1</div>
         <div class="bar"><div id="hp-bar" class="hp-fill"></div></div>
-        <small>[WASD] Mover - [Espacio] Atacar - [I] Inventario</small>
+        <small>[WASD] Mover - [Click] Atacar - [I] Stats</small>
     </div>
 
     <div id="inventory">
@@ -71,11 +82,14 @@
 
         const WORLD_SIZE = 1500;
         let isHost = true;
+        let gameActive = false;
+        let mousePos = { x: 0, y: 0 };
+        
         let myData = { 
             id: '', x: 750, y: 750, 
-            nick: "Heroe", skin: "#ffd700", acc: "#ff0000", // Añadido color de accesorio
+            nick: "Heroe", skin: "#ffd700", acc: "#ff0000",
             lv: 1, xp: 0, hp: 100, maxHp: 100, atk: 10, 
-            state: 'idle', frame: 0, dir: 1 
+            state: 'idle', frame: 0, dir: 1, angle: 0
         };
         
         let peers = {};
@@ -83,15 +97,48 @@
         let slimes = [];
         let animTimer = 0;
 
-        // Función para actualizar apariencia desde el menú UI
-        function updateAppearance() {
-            myData.nick = document.getElementById('change-nick').value;
-            myData.skin = document.getElementById('change-skin').value;
-            myData.acc = document.getElementById('change-acc').value;
-            broadcast({ type: 'player_sync', data: myData });
+        // --- FUNCIONES DE INICIO ---
+        function startAsHost() {
+            isHost = true;
+            applyInitialSettings();
+            initGame();
+            document.getElementById('host-status').innerText = "Estado: HOST (Esperando jugadores)";
         }
 
-        // --- LÓGICA RED (PeerJS) ---
+        function startAsClient() {
+            const targetId = document.getElementById('join-id').value;
+            if(!targetId) return alert("Pon el ID del Host");
+            isHost = false;
+            applyInitialSettings();
+            initGame();
+            setupConnection(peer.connect(targetId));
+            document.getElementById('host-status').innerText = "Estado: CLIENTE";
+        }
+
+        function applyInitialSettings() {
+            myData.nick = document.getElementById('init-nick').value || "Heroe";
+            myData.skin = document.getElementById('init-skin').value;
+            myData.acc = document.getElementById('init-acc').value;
+            // Sincronizar con los inputs del panel lateral
+            document.getElementById('live-nick').value = myData.nick;
+            document.getElementById('live-skin').value = myData.skin;
+            document.getElementById('live-acc').value = myData.acc;
+        }
+
+        function initGame() {
+            gameActive = true;
+            document.getElementById('main-menu').style.display = 'none';
+            document.getElementById('game').style.display = 'block';
+            document.querySelectorAll('.ui-panel, .custom-panel, #hud').forEach(el => el.style.display = 'block');
+            if(isHost) {
+                for(let i=0; i<12; i++) {
+                    slimes.push({ id: i, x: Math.random()*WORLD_SIZE, y: Math.random()*WORLD_SIZE, hp: 40, maxHp: 40, frame: 0 });
+                }
+            }
+            render();
+        }
+
+        // --- RED ---
         peer.on('open', (id) => { 
             myData.id = id; 
             document.getElementById('my-id').innerText = id; 
@@ -99,15 +146,8 @@
 
         peer.on('connection', (conn) => {
             isHost = true;
-            document.getElementById('host-status').innerText = "Estado: HOST";
             setupConnection(conn);
         });
-
-        function connectToPeer() {
-            isHost = false;
-            document.getElementById('host-status').innerText = "Estado: CLIENTE";
-            setupConnection(peer.connect(document.getElementById('target-id').value));
-        }
 
         function setupConnection(conn) {
             peers[conn.peer] = conn;
@@ -125,12 +165,13 @@
             for(let id in peers) peers[id].send(msg);
         }
 
-        if(isHost) {
-            for(let i=0; i<10; i++) {
-                slimes.push({ id: i, x: Math.random()*WORLD_SIZE, y: Math.random()*WORLD_SIZE, hp: 40, maxHp: 40, frame: 0 });
-            }
+        function updateAppearance() {
+            myData.nick = document.getElementById('live-nick').value;
+            myData.skin = document.getElementById('live-skin').value;
+            myData.acc = document.getElementById('live-acc').value;
         }
 
+        // --- INPUTS ---
         const keys = {};
         window.onkeydown = (e) => {
             keys[e.key.toLowerCase()] = true;
@@ -144,21 +185,47 @@
         };
         window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
 
+        window.onmousemove = (e) => {
+            if(!gameActive) return;
+            // Calcular ángulo hacia el mouse desde el centro de la pantalla (donde está el jugador)
+            mousePos.x = e.clientX;
+            mousePos.y = e.clientY;
+            myData.angle = Math.atan2(e.clientY - window.innerHeight/2, e.clientX - window.innerWidth/2);
+            myData.dir = (mousePos.x > window.innerWidth/2) ? 1 : -1;
+        };
+
+        window.onmousedown = () => {
+            if(!gameActive) return;
+            myData.state = 'attack';
+            checkAttack();
+            setTimeout(() => { if(myData.state === 'attack') myData.state = 'idle'; }, 200);
+        };
+
+        function checkAttack() {
+            slimes.forEach(s => {
+                let dist = Math.hypot(s.x - myData.x, s.y - myData.y);
+                // El ataque detecta si el slime está cerca del ángulo del mouse
+                let angleToSlime = Math.atan2(s.y - myData.y, s.x - myData.x);
+                let diff = Math.abs(myData.angle - angleToSlime);
+                if(dist < 70 && diff < 1.2 && s.hp > 0) {
+                    if(isHost) s.hp -= myData.atk;
+                    else broadcast({ type: 'slime_damage', id: s.id, dmg: myData.atk });
+                }
+            });
+        }
+
+        // --- LOOP PRINCIPAL ---
         function update() {
+            if(!gameActive) return;
             let moving = false;
             const speed = 4;
             if (keys['w']) { myData.y -= speed; moving = true; }
             if (keys['s']) { myData.y += speed; moving = true; }
-            if (keys['a']) { myData.x -= speed; moving = true; myData.dir = -1; }
-            if (keys['d']) { myData.x += speed; moving = true; myData.dir = 1; }
+            if (keys['a']) { myData.x -= speed; moving = true; }
+            if (keys['d']) { myData.x += speed; moving = true; }
 
-            if (keys[' ']) {
-                myData.state = 'attack';
-                checkAttack();
-            } else if (moving) {
-                myData.state = 'walk';
-            } else {
-                myData.state = 'idle';
+            if (myData.state !== 'attack') {
+                myData.state = moving ? 'walk' : 'idle';
             }
 
             animTimer++;
@@ -175,61 +242,48 @@
                     if(dist < 150) {
                         s.x += (myData.x - s.x) * 0.01;
                         s.y += (myData.y - s.y) * 0.01;
-                        if(dist < 20 && Math.random() < 0.05) myData.hp -= 1;
+                        if(dist < 20 && Math.random() < 0.05) myData.hp -= 0.5;
                     }
                 });
                 broadcast({ type: 'world_sync', slimes: slimes });
             }
             broadcast({ type: 'player_sync', data: myData });
             document.getElementById('hp-bar').style.width = (myData.hp/myData.maxHp)*100 + "%";
-            document.getElementById('player-tag').innerText = `Nivel ${myData.lv} - ${myData.nick}`;
+            document.getElementById('player-tag').innerText = `Nvl ${myData.lv} - ${myData.nick}`;
         }
 
-        function checkAttack() {
-            slimes.forEach(s => {
-                let dist = Math.hypot(s.x - myData.x, s.y - myData.y);
-                if(dist < 50 && s.hp > 0) {
-                    if(isHost) s.hp -= myData.atk;
-                    else broadcast({ type: 'slime_damage', id: s.id, dmg: myData.atk });
-                }
-            });
-        }
-
-        // --- DIBUJO ---
         function drawPlayer(p) {
             ctx.save();
             ctx.translate(p.x, p.y);
             let bounce = (p.state === 'walk' || p.state === 'idle') ? Math.sin(p.frame) * 3 : 0;
-            ctx.scale(p.dir, 1);
             
-            // Cuerpo (Ropa)
+            // Cuerpo
+            ctx.save();
+            ctx.scale(p.dir, 1);
             ctx.fillStyle = p.skin;
             ctx.fillRect(-15, -15 + bounce, 30, 30);
-            
-            // Accesorio (Cinturón o banda)
-            ctx.fillStyle = p.acc || "#ff0000";
+            ctx.fillStyle = p.acc;
             ctx.fillRect(-15, -2 + bounce, 30, 5); 
-            
-            if(p.state === 'attack') {
-                ctx.strokeStyle = "white"; ctx.lineWidth = 4;
-                ctx.beginPath(); ctx.arc(10, 0, 30, -1, 1); ctx.stroke();
-            }
             ctx.restore();
-            
-            ctx.fillStyle = "white"; ctx.textAlign = "center"; ctx.font = "12px Arial";
+
+            // Arma apuntando al mouse (p.angle)
+            if(p.state === 'attack') {
+                ctx.save();
+                ctx.rotate(p.angle);
+                ctx.strokeStyle = "white"; ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.arc(20, 0, 30, -0.8, 0.8);
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            ctx.restore();
+            ctx.fillStyle = "white"; ctx.textAlign = "center";
             ctx.fillText(p.nick, p.x, p.y - 35);
         }
 
-        function drawSlime(s) {
-            if(s.hp <= 0) return;
-            let bounce = Math.sin(s.frame) * 4;
-            ctx.fillStyle = "#44ff44";
-            ctx.beginPath();
-            ctx.ellipse(s.x, s.y + 10, 15 + bounce, 10 - bounce, 0, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
         function render() {
+            if(!gameActive) return;
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -245,7 +299,12 @@
                 ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(WORLD_SIZE, i); ctx.stroke();
             }
 
-            slimes.forEach(drawSlime);
+            slimes.forEach(s => {
+                if(s.hp <= 0) return;
+                ctx.fillStyle = "#44ff44";
+                ctx.beginPath(); ctx.ellipse(s.x, s.y + 10, 15 + Math.sin(s.frame)*2, 10, 0, 0, Math.PI*2); ctx.fill();
+            });
+
             for(let id in remotePlayers) drawPlayer(remotePlayers[id]);
             drawPlayer(myData);
 
@@ -253,7 +312,6 @@
             update();
             requestAnimationFrame(render);
         }
-        render();
     </script>
 </body>
 </html>

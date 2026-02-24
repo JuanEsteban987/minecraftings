@@ -3,40 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>RPG NEO GENESIS - FIX</title>
-    <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <title>RPG NEO GENESIS: ELITE FINAL</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         :root { --primary: #38bdf8; --accent: #ef4444; --gold: #fbbf24; --glass: rgba(15, 23, 42, 0.95); }
         body { margin: 0; overflow: hidden; background: #070a0e; font-family: 'Segoe UI', sans-serif; color: white; touch-action: none; }
         canvas { display: block; background: #0a0f0a; }
         .glass { background: var(--glass); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; }
-        #room-id-tag { position: absolute; top: 10px; right: 10px; padding: 10px; font-family: monospace; z-index: 1000; display: none; color: var(--primary); border: 1px solid var(--primary); }
-        #setup { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 30px; text-align: center; z-index: 1000; width: 300px; }
-        input { background: #1e293b; border: 1px solid #334155; color: white; padding: 12px; border-radius: 8px; width: 90%; margin-bottom: 12px; }
-        button { background: var(--primary); border: none; padding: 14px; font-weight: bold; border-radius: 8px; cursor: pointer; width: 100%; color: #000; }
-        #hud { position: absolute; top: 15px; left: 15px; padding: 12px; z-index: 500; pointer-events: none; display:none; }
-        .bar { height: 8px; width: 150px; background: #334155; margin-top: 5px; border-radius: 4px; overflow: hidden; }
-        #hp-fill { height: 100%; width: 100%; background: var(--accent); }
+        
+        /* Sala ID */
+        #room-tag { position: absolute; top: 10px; right: 10px; padding: 12px; z-index: 1000; display: none; border: 2px solid var(--primary); cursor: pointer; background: rgba(0,0,0,0.9); font-family: monospace; font-weight: bold; }
+
+        /* Login */
+        #setup { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 30px; text-align: center; z-index: 2000; width: 320px; box-shadow: 0 0 50px rgba(0,0,0,1); }
+        input { background: #1e293b; border: 1px solid #334155; color: white; padding: 14px; border-radius: 8px; width: 90%; margin-bottom: 12px; font-size: 16px; outline: none; }
+        button { background: var(--primary); border: none; padding: 15px; font-weight: bold; border-radius: 8px; cursor: pointer; width: 100%; color: #000; text-transform: uppercase; }
+        
+        /* HUD */
+        #hud { position: absolute; top: 15px; left: 15px; padding: 15px; min-width: 200px; z-index: 500; display: none; pointer-events: none; }
+        .bar-bg { height: 10px; background: #334155; border-radius: 5px; margin-top: 5px; overflow: hidden; }
+        #hp-fill { height: 100%; width: 100%; background: var(--accent); transition: 0.2s; }
+        #xp-fill { height: 100%; width: 0%; background: #a855f7; }
+
+        /* Tienda */
+        #shop-ui { position: absolute; top: 50%; right: 20px; transform: translateY(-50%); width: 280px; padding: 20px; display: none; z-index: 1500; max-height: 75vh; overflow-y: auto; border: 2px solid var(--gold); }
+        .shop-item { background: rgba(255,255,255,0.05); border: 1px solid #334155; padding: 12px; border-radius: 8px; margin-bottom: 8px; cursor: pointer; }
+
+        /* Controles Móvil */
+        #mobile-ui { position: absolute; inset: 0; pointer-events: none; display: none; }
+        #joy-base { position: absolute; bottom: 50px; left: 50px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border-radius: 50%; pointer-events: auto; }
+        #joy-stick { position: absolute; top: 35px; left: 35px; width: 50px; height: 50px; background: var(--primary); border-radius: 50%; opacity: 0.8; }
+        #btn-atk { position: absolute; bottom: 60px; right: 50px; width: 90px; height: 90px; background: var(--accent); border-radius: 50%; pointer-events: auto; display: flex; justify-content: center; align-items: center; font-size: 35px; }
     </style>
 </head>
 <body>
 
-    <div id="room-id-tag" class="glass" onclick="copyId()">ID: ---</div>
+    <div id="room-tag" class="glass" onclick="copyID()">REINO ID: <span id="room-val">---</span></div>
 
     <div id="setup" class="glass">
-        <h2 style="color:var(--primary)">NEO GENESIS</h2>
-        <input type="text" id="playerName" placeholder="Tu Nombre">
-        <button id="hostBtn" onclick="startHost()">CREAR REINO</button>
-        <p style="margin:10px; font-size:12px; opacity:0.5">o</p>
-        <input type="text" id="joinId" placeholder="ID del Amigo">
-        <button onclick="startJoin()" style="background:#475569; color:white;">UNIRSE</button>
-        <p id="status" style="font-size:12px; color:var(--gold); margin-top:10px"></p>
+        <h1 style="color:var(--primary); margin:0;">NEO GENESIS</h1>
+        <p style="font-size: 11px; opacity: 0.6; margin-bottom: 20px;">SISTEMA MULTIJUGADOR COMPLETO</p>
+        <input type="text" id="userName" placeholder="Nombre del Guerrero">
+        <button onclick="initNetwork(true)">CREAR REINO</button>
+        <div style="margin: 10px; font-size: 12px; opacity: 0.4;">— O —</div>
+        <input type="text" id="joinID" placeholder="ID de la Sala">
+        <button onclick="initNetwork(false)" style="background:#475569; color:white;">UNIRSE</button>
+        <p id="status" style="font-size: 12px; color: var(--gold); margin-top: 15px;"></p>
     </div>
 
     <div id="hud" class="glass">
-        <div id="d-name">Guerrero</div>
-        <div class="bar"><div id="hp-fill"></div></div>
-        <div style="color:var(--gold); font-size:12px; margin-top:5px" id="d-gold">$150</div>
+        <div style="display:flex; justify-content:space-between;"><span id="hud-name">---</span> <span id="hud-gold" style="color:var(--gold)">$0</span></div>
+        <div class="bar-bg"><div id="hp-fill"></div></div>
+        <div class="bar-bg" style="height:5px;"><div id="xp-fill"></div></div>
+    </div>
+
+    <div id="shop-ui" class="glass">
+        <h3 style="color:var(--gold); margin:0 0 15px 0; text-align: center;">TIENDA</h3>
+        <div id="shop-list"></div>
+        <button onclick="toggleShop()" style="background:#334155; color:white; margin-top:15px;">CERRAR</button>
+    </div>
+
+    <div id="mobile-ui">
+        <div id="joy-base"><div id="joy-stick"></div></div>
+        <div id="btn-atk">⚔️</div>
     </div>
 
     <canvas id="game"></canvas>
@@ -47,128 +76,163 @@ const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth; canvas.height = window.innerHeight;
 
 let players = {}, slimes = [], connections = {}, peer = null, myId = null;
-let me = { x: 2000, y: 2000, name: "", hp: 100, gold: 150, weapon: 'Espada', angle: 0, atkF: 0 };
+let isHost = false, isDead = false, camera = {x:0, y:0}, keys = {};
+let me = { x: 2000, y: 2000, name: "", hp: 100, gold: 150, weapon: 'w1', angle: 0, atkF: 0, lv: 1, xp: 0 };
 
-// 1. MEJORADO: Función de Host con manejo de errores
-function startHost() {
-    const name = document.getElementById('playerName').value;
-    if(!name) return alert("Escribe tu nombre");
-    me.name = name;
-
-    document.getElementById('status').innerText = "Invocando servidor...";
-    document.getElementById('hostBtn').disabled = true;
-
-    // Inicializar PeerJS con servidores de Google para evitar bloqueos
-    peer = new Peer(null, {
-        debug: 2,
-        config: {'iceServers': [{ url: 'stun:stun.l.google.com:19302' }]}
-    });
-
-    peer.on('open', id => {
-        myId = id;
-        players[id] = me;
-        document.getElementById('room-id-tag').innerText = "SALA ID: " + id;
-        document.getElementById('room-id-tag').style.display = "block";
-        document.getElementById('setup').style.display = "none";
-        document.getElementById('hud').style.display = "block";
-        initGame();
-        // Crear slimes iniciales
-        for(let i=0; i<10; i++) spawnSlime();
-    });
-
-    peer.on('connection', conn => {
-        conn.on('open', () => {
-            connections[conn.peer] = conn;
-            conn.send({type:'init', players, slimes});
-        });
-        conn.on('data', data => handleData(data, conn.peer));
-    });
-
-    peer.on('error', err => {
-        console.error(err);
-        alert("Error de conexión. Prueba abrirlo en una ventana de incógnito o HTTPS.");
-        location.reload();
-    });
+// ARMAS
+const WEAPONS = {};
+for(let i=1; i<=100; i++) {
+    WEAPONS[`w${i}`] = { n: "Arma Lvl "+i, dmg: 10 + (i*3), range: 50 + (i), price: i*50, col: i > 80 ? '#fbbf24' : '#38bdf8' };
 }
 
-function startJoin() {
-    const hostId = document.getElementById('joinId').value.trim();
-    const name = document.getElementById('playerName').value;
-    if(!hostId || !name) return alert("Faltan datos");
-    me.name = name;
+// RED
+function initNetwork(host) {
+    const name = document.getElementById('userName').value;
+    if(!name) return alert("Pon tu nombre");
+    me.name = name; isHost = host;
+    document.getElementById('status').innerText = "Conectando...";
 
     peer = new Peer();
     peer.on('open', id => {
         myId = id;
-        const conn = peer.connect(hostId);
-        conn.on('open', () => {
-            connections[hostId] = conn;
-            conn.send({type:'join', p:me});
-            document.getElementById('setup').style.display = "none";
-            document.getElementById('hud').style.display = "block";
-            initGame();
-        });
-        conn.on('data', data => handleData(data, hostId));
-    });
-}
-
-function handleData(data, senderId) {
-    if(data.type === 'init') { players = data.players; slimes = data.slimes; players[myId] = me; }
-    if(data.type === 'join') { players[senderId] = data.p; if(peer.id === myId) broadcast({type:'new', id:senderId, p:data.p}); }
-    if(data.type === 'new') { players[data.id] = data.p; }
-    if(data.type === 'sync') { if(players[senderId]) Object.assign(players[senderId], data); }
-}
-
-function broadcast(data) { for(let id in connections) connections[id].send(data); }
-
-function spawnSlime() {
-    slimes.push({id: Math.random(), x: 1800+Math.random()*400, y: 1800+Math.random()*400, hp: 50});
-}
-
-function initGame() {
-    requestAnimationFrame(loop);
-}
-
-function loop() {
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    ctx.save();
-    ctx.translate(-me.x + canvas.width/2, -me.y + canvas.height/2);
-
-    // Fondo
-    ctx.fillStyle = "#0d1a0d";
-    ctx.fillRect(0,0,4000,4000);
-
-    // Dibujar Jugadores
-    for(let id in players) {
-        let p = players[id];
-        ctx.fillStyle = id === myId ? "#38bdf8" : "#ef4444";
-        ctx.fillRect(p.x - 15, p.y - 15, 30, 30);
-        ctx.fillStyle = "white";
-        ctx.fillText(p.name, p.x - 10, p.y - 20);
-        
-        if(id === myId) {
-            // Movimiento simple para test
-            if(window.innerWidth < 800) { /* Joystick logic here */ }
-            // Enviar posición
-            if(myId && connections) broadcast({type:'sync', x:me.x, y:me.y});
+        if(host) {
+            players[id] = me;
+            for(let i=0; i<15; i++) spawnS();
+            document.getElementById('room-val').innerText = id;
+            document.getElementById('room-tag').style.display = 'block';
+            startGame();
+        } else {
+            const rid = document.getElementById('joinID').value.trim();
+            const conn = peer.connect(rid);
+            conn.on('open', () => {
+                connections[rid] = conn;
+                conn.send({type:'join', p:me});
+                document.getElementById('room-val').innerText = rid;
+                document.getElementById('room-tag').style.display = 'block';
+                startGame();
+            });
         }
-    }
-
-    // Dibujar Slimes
-    slimes.forEach(s => {
-        ctx.fillStyle = "#4ade80";
-        ctx.beginPath(); ctx.arc(s.x, s.y, 15, 0, 7); ctx.fill();
     });
 
-    ctx.restore();
-    requestAnimationFrame(loop);
+    peer.on('connection', conn => {
+        conn.on('data', d => {
+            if(d.type==='join') { players[conn.peer]=d.p; if(isHost) broadcast({type:'new', id:conn.peer, p:d.p}); }
+            if(d.type==='new') players[d.id] = d.p;
+            if(d.type==='init') { players=d.ps; slimes=d.ss; players[myId]=me; }
+            if(d.type==='sync') { if(players[conn.peer]) Object.assign(players[conn.peer], d); if(isHost) broadcast(d, conn.peer); }
+            if(d.type==='hit' && d.tid===myId) takeDmg(d.dmg);
+        });
+        if(isHost) conn.on('open', () => conn.send({type:'init', ps:players, ss:slimes}));
+    });
 }
 
-function copyId() {
-    const id = document.getElementById('room-id-tag').innerText.replace("SALA ID: ", "");
-    navigator.clipboard.writeText(id);
-    alert("¡ID Copiado!");
+function broadcast(d, skip=null) { for(let id in connections) if(id!==skip) connections[id].send(d); }
+
+function startGame() {
+    document.getElementById('setup').style.display = 'none';
+    document.getElementById('hud').style.display = 'block';
+    if('ontouchstart' in window) document.getElementById('mobile-ui').style.display = 'block';
+    fillShop();
+    
+    window.addEventListener('keydown', e => { keys[e.key.toLowerCase()]=true; if(e.key==='e') toggleShop(); });
+    window.addEventListener('keyup', e => keys[e.key.toLowerCase()]=false);
+    canvas.addEventListener('mousedown', doAtk);
+    
+    // Joystick
+    let jX=0, jY=0;
+    const base = document.getElementById('joy-base'), stick = document.getElementById('joy-stick');
+    base.addEventListener('touchmove', e => {
+        const t = e.touches[0], r = base.getBoundingClientRect();
+        const dx = t.clientX - (r.left + 60), dy = t.clientY - (r.top + 60);
+        const d = Math.min(45, Math.hypot(dx, dy)), a = Math.atan2(dy, dx);
+        jX = Math.cos(a); jY = Math.sin(a); me.angle = a;
+        stick.style.transform = `translate(${Math.cos(a)*d}px, ${Math.sin(a)*d}px)`;
+    });
+    base.addEventListener('touchend', () => { jX=0; jY=0; stick.style.transform='translate(0,0)'; });
+    document.getElementById('btn-atk').addEventListener('touchstart', doAtk);
+
+    function loop() {
+        if(!isDead) {
+            if(jX||jY){ me.x+=jX*5; me.y+=jY*5; }
+            else {
+                let dx=0, dy=0;
+                if(keys['a']) dx--; if(keys['d']) dx++; if(keys['w']) dy--; if(keys['s']) dy++;
+                if(dx||dy){ me.x+=dx*5; me.y+=dy*5; me.angle=Math.atan2(dy,dx); }
+            }
+        }
+        if(me.atkF > 0) me.atkF--;
+        camera.x = me.x - canvas.width/2; camera.y = me.y - canvas.height/2;
+
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        ctx.save(); ctx.translate(-camera.x, -camera.y);
+        ctx.fillStyle="#0d1a0d"; ctx.fillRect(0,0,4000,4000);
+
+        if(isHost) {
+            slimes.forEach(s => {
+                let target = Object.values(players)[0];
+                if(target) {
+                    let a = Math.atan2(target.y-s.y, target.x-s.x);
+                    s.x += Math.cos(a)*1.5; s.y += Math.sin(a)*1.5;
+                    if(Math.hypot(target.x-s.x, target.y-s.y) < 30) takeDmg(0.2);
+                }
+            });
+            broadcast({type:'slime_update', slimes});
+        }
+
+        slimes.forEach(s => { ctx.fillStyle="#4ade80"; ctx.beginPath(); ctx.arc(s.x,s.y,15,0,7); ctx.fill(); });
+
+        for(let id in players) {
+            let p = players[id];
+            if(id===myId) broadcast({type:'sync', x:me.x, y:me.y, angle:me.angle, atk:me.atkF, weapon:me.weapon});
+            ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.angle + (p.atk>0?(15-p.atk)*0.2:0));
+            ctx.fillStyle=WEAPONS[p.weapon].col; ctx.fillRect(10,-2,WEAPONS[p.weapon].range,4); ctx.restore();
+            ctx.fillStyle=id===myId?"#38bdf8":"#ef4444"; ctx.fillRect(p.x-15,p.y-15,30,30);
+            ctx.fillStyle="white"; ctx.fillText(p.name, p.x-10, p.y-20);
+        }
+        ctx.restore();
+        updateHud();
+        requestAnimationFrame(loop);
+    }
+    loop();
 }
+
+function doAtk() {
+    if(me.atkF > 0) return;
+    me.atkF = 15;
+    const w = WEAPONS[me.weapon];
+    slimes.forEach(s => {
+        if(Math.hypot(s.x-me.x, s.y-me.y) < w.range + 20) {
+            s.hp -= w.dmg;
+            if(s.hp<=0) { me.gold += 20; me.xp += 20; slimes = slimes.filter(x=>x.id!==s.id); if(isHost) spawnS(); }
+        }
+    });
+    for(let id in players) if(id!==myId && Math.hypot(players[id].x-me.x, players[id].y-me.y) < w.range) {
+        let h = {type:'hit', tid:id, dmg:w.dmg};
+        if(isHost) broadcast(h); else Object.values(connections)[0].send(h);
+    }
+}
+
+function spawnS() { slimes.push({id:Math.random(), x:1500+Math.random()*1000, y:1500+Math.random()*1000, hp:50}); }
+function takeDmg(d) { me.hp -= d; if(me.hp<=0) location.reload(); }
+function updateHud() {
+    document.getElementById('hud-name').innerText = me.name;
+    document.getElementById('hud-gold').innerText = "$"+me.gold;
+    document.getElementById('hp-fill').style.width = me.hp + "%";
+    document.getElementById('xp-fill').style.width = me.xp + "%";
+    if(me.xp>=100){ me.lv++; me.xp=0; me.hp=100; }
+}
+function fillShop() {
+    const l = document.getElementById('shop-list');
+    Object.keys(WEAPONS).forEach(k => {
+        const w = WEAPONS[k];
+        const d = document.createElement('div'); d.className='shop-item';
+        d.innerHTML = `${w.n} - $${w.price}`;
+        d.onclick = () => { if(me.gold>=w.price){ me.gold-=w.price; me.weapon=k; } };
+        l.appendChild(d);
+    });
+}
+function toggleShop() { const s=document.getElementById('shop-ui'); s.style.display=s.style.display==='block'?'none':'block'; }
+function copyID() { navigator.clipboard.writeText(document.getElementById('room-val').innerText); alert("ID Copiado"); }
 </script>
 </body>
 </html>

@@ -2,27 +2,16 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>RPG P2P: Slimes & Inventario</title>
+    <title>RPG P2P: Sincronización Total</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { font-family: 'Courier New', Courier, monospace; margin: 0; overflow: hidden; background: #1a1a1a; color: white; }
+        body { font-family: 'Courier New', monospace; margin: 0; overflow: hidden; background: #1a1a1a; color: white; }
         canvas { background: #2d5a27; display: block; }
-        
-        .ui-panel { position: absolute; top: 10px; left: 10px; z-index: 10; padding: 10px; background: rgba(0,0,0,0.8); border: 2px solid #555; border-radius: 5px; }
-        
-        /* Estilo del Inventario */
-        #inventory {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 300px; background: #333; border: 4px solid #8b4513; padding: 20px;
-            display: none; z-index: 20; box-shadow: 0 0 20px black;
-        }
-        .stat-line { margin: 10px 0; border-bottom: 1px solid #555; display: flex; justify-content: space-between; }
-        .close-hint { font-size: 10px; color: #aaa; text-align: center; margin-top: 10px; }
-        
+        .ui-panel { position: absolute; top: 10px; left: 10px; z-index: 10; padding: 10px; background: rgba(0,0,0,0.8); border: 2px solid #555; }
         #hud { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); text-align: center; pointer-events: none; }
-        .bar { width: 200px; height: 15px; background: #444; border: 1px solid #000; margin: 5px; }
-        .hp-fill { background: #ff3333; height: 100%; width: 100%; transition: width 0.3s; }
-        .xp-fill { background: #33bbff; height: 100%; width: 0%; transition: width 0.3s; }
+        .bar { width: 200px; height: 10px; background: #444; border: 1px solid #000; margin: 5px; }
+        .hp-fill { background: #ff3333; height: 100%; width: 100%; transition: width 0.2s; }
+        #inventory { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 250px; background: #333; border: 4px solid #8b4513; padding: 20px; display: none; z-index: 20; }
     </style>
 </head>
 <body>
@@ -30,25 +19,21 @@
     <div class="ui-panel">
         ID: <span id="my-id" style="color:#0f0">...</span><br>
         <input type="text" id="target-id" placeholder="ID Amigo">
-        <button onclick="connectToPeer()">Unirse</button><br>
-        Nick: <input type="text" id="nick" value="Heroe" maxlength="10" onchange="updateMyData()">
+        <button onclick="connectToPeer()">Conectar</button>
+        <div id="host-status" style="font-size: 10px; color: #aaa; margin-top:5px;">Eres el Host (Líder del mapa)</div>
     </div>
 
     <div id="hud">
-        <div id="player-tag">Nvl 1 - Heroe</div>
+        <div id="player-tag">Nivel 1</div>
         <div class="bar"><div id="hp-bar" class="hp-fill"></div></div>
-        <div class="bar"><div id="xp-bar" class="xp-fill"></div></div>
-        <small>Presiona [I] para Inventario - [Espacio] para Atacar</small>
+        <small>[WASD] Mover - [Espacio] Atacar - [I] Stats</small>
     </div>
 
     <div id="inventory">
-        <h2 style="text-align:center; color: #ffd700;">STATS</h2>
-        <div class="stat-line"><span>Nivel:</span> <span id="st-lv">1</span></div>
-        <div class="stat-line"><span>XP:</span> <span id="st-xp">0/100</span></div>
-        <div class="stat-line"><span>Daño:</span> <span id="st-atk">10</span></div>
-        <div class="stat-line"><span>Vida Máx:</span> <span id="st-hp">100</span></div>
-        <div class="stat-line"><span>Arma:</span> <span style="color:#0ff">Espada Simple</span></div>
-        <div class="close-hint">Presiona [I] para cerrar</div>
+        <h2 style="text-align:center; color: gold;">INVENTARIO</h2>
+        <p>Nivel: <span id="st-lv">1</span></p>
+        <p>Ataque: <span id="st-atk">10</span></p>
+        <p>HP Máx: <span id="st-hp">100</span></p>
     </div>
 
     <canvas id="game"></canvas>
@@ -58,131 +43,176 @@
         const ctx = canvas.getContext('2d');
         const peer = new Peer();
 
+        // --- CONFIGURACIÓN ---
         const WORLD_SIZE = 1500;
+        let isHost = true; // Por defecto el primero es host
         let myData = { 
             id: '', x: 750, y: 750, nick: "Heroe", skin: "#ffd700", 
-            lv: 1, xp: 0, hp: 100, maxHp: 100, atk: 10, isAttacking: false 
+            lv: 1, xp: 0, hp: 100, maxHp: 100, atk: 10, 
+            state: 'idle', frame: 0, dir: 1 // dir: 1 derecha, -1 izquierda
         };
         
         let peers = {};
         let remotePlayers = {};
         let slimes = [];
-        let trees = [];
-        let isInventoryOpen = false;
+        let animTimer = 0;
 
-        // Inicializar Mundo
-        for(let i=0; i<40; i++) trees.push({x: Math.random()*WORLD_SIZE, y: Math.random()*WORLD_SIZE});
-        
-        // El primer jugador (Host) crea los slimes
-        function createSlimes() {
-            for(let i=0; i<10; i++) {
-                slimes.push({ id: Math.random(), x: Math.random()*WORLD_SIZE, y: Math.random()*WORLD_SIZE, hp: 30, maxHp: 30 });
-            }
-        }
-        createSlimes();
+        // --- RED ---
+        peer.on('open', (id) => { 
+            myData.id = id; 
+            document.getElementById('my-id').innerText = id; 
+        });
 
-        peer.on('open', (id) => { myData.id = id; document.getElementById('my-id').innerText = id; });
-        peer.on('connection', setupConnection);
+        peer.on('connection', (conn) => {
+            isHost = true; // Si alguien se conecta a ti, tú eres el Host
+            document.getElementById('host-status').innerText = "Estado: HOST (Sincronizando Slimes)";
+            setupConnection(conn);
+        });
 
         function connectToPeer() {
+            isHost = false; // Si tú te conectas a alguien, él es el Host
+            document.getElementById('host-status').innerText = "Estado: CLIENTE (Recibiendo datos)";
             setupConnection(peer.connect(document.getElementById('target-id').value));
         }
 
         function setupConnection(conn) {
-            conn.on('open', () => {
-                peers[conn.peer] = conn;
-                conn.send({ type: 'sync_all', data: myData, slimes: slimes });
-                conn.on('data', (data) => {
-                    if (data.type === 'update') remotePlayers[data.data.id] = data.data;
-                    if (data.type === 'sync_all') { remotePlayers[data.data.id] = data.data; slimes = data.slimes; }
-                    if (data.type === 'slime_hit') {
-                        let s = slimes.find(s => s.id === data.slimeId);
-                        if(s) s.hp -= data.dmg;
-                    }
-                });
-            });
-        }
-
-        function updateMyData() { myData.nick = document.getElementById('nick').value; }
-
-        // Input
-        const keys = {};
-        window.onkeydown = (e) => {
-            keys[e.key.toLowerCase()] = true;
-            if(e.key.toLowerCase() === 'i') {
-                isInventoryOpen = !isInventoryOpen;
-                document.getElementById('inventory').style.display = isInventoryOpen ? 'block' : 'none';
-                updateStatsUI();
-            }
-            if(e.code === 'Space' && !myData.isAttacking) attack();
-        };
-        window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
-
-        function attack() {
-            myData.isAttacking = true;
-            setTimeout(() => myData.isAttacking = false, 200);
-
-            slimes.forEach(s => {
-                let dist = Math.hypot(s.x - myData.x, s.y - myData.y);
-                if(dist < 60 && s.hp > 0) {
-                    s.hp -= myData.atk;
-                    broadcast({ type: 'slime_hit', slimeId: s.id, dmg: myData.atk });
-                    if(s.hp <= 0) addXP(25);
+            peers[conn.peer] = conn;
+            conn.on('data', (data) => {
+                if (data.type === 'player_sync') remotePlayers[data.data.id] = data.data;
+                if (data.type === 'world_sync') {
+                    slimes = data.slimes; // Los clientes reciben la posición de los slimes del host
+                }
+                if (data.type === 'slime_damage' && isHost) {
+                    // El Host procesa el daño
+                    let s = slimes.find(s => s.id === data.id);
+                    if(s) s.hp -= data.dmg;
                 }
             });
-        }
-
-        function addXP(amount) {
-            myData.xp += amount;
-            if(myData.xp >= 100) {
-                myData.lv++;
-                myData.xp = 0;
-                myData.maxHp += 20;
-                myData.hp = myData.maxHp;
-                myData.atk += 5;
-            }
-            updateStatsUI();
-        }
-
-        function updateStatsUI() {
-            document.getElementById('st-lv').innerText = myData.lv;
-            document.getElementById('st-xp').innerText = `${myData.xp}/100`;
-            document.getElementById('st-atk').innerText = myData.atk;
-            document.getElementById('st-hp').innerText = myData.maxHp;
-            document.getElementById('hp-bar').style.width = (myData.hp/myData.maxHp)*100 + "%";
-            document.getElementById('xp-bar').style.width = (myData.xp/100)*100 + "%";
-            document.getElementById('player-tag').innerText = `Nvl ${myData.lv} - ${myData.nick}`;
         }
 
         function broadcast(msg) {
             for(let id in peers) peers[id].send(msg);
         }
 
-        function update() {
-            if(isInventoryOpen) return;
-            let moved = false;
-            const speed = 4;
-            if (keys['w']) { myData.y -= speed; moved = true; }
-            if (keys['s']) { myData.y += speed; moved = true; }
-            if (keys['a']) { myData.x -= speed; moved = true; }
-            if (keys['d']) { myData.x += speed; moved = true; }
-
-            // IA Slimes Simple (Solo se mueven si eres el Host o el único jugador)
-            slimes.forEach(s => {
-                if(s.hp <= 0) return;
-                let dist = Math.hypot(myData.x - s.x, myData.y - s.y);
-                if(dist < 200) {
-                    s.x += (myData.x - s.x) * 0.01;
-                    s.y += (myData.y - s.y) * 0.01;
-                    if(dist < 25 && Math.random() < 0.02) myData.hp -= 1;
-                }
-            });
-
-            if (moved || myData.isAttacking) broadcast({ type: 'update', data: myData });
-            if (myData.hp < myData.maxHp && !moved) myData.hp += 0.01; // Regeneración lenta
+        // --- LÓGICA DE JUEGO ---
+        if(isHost) {
+            for(let i=0; i<8; i++) {
+                slimes.push({ id: i, x: Math.random()*WORLD_SIZE, y: Math.random()*WORLD_SIZE, hp: 40, maxHp: 40, frame: 0 });
+            }
         }
 
-        function draw() {
+        const keys = {};
+        window.onkeydown = (e) => {
+            keys[e.key.toLowerCase()] = true;
+            if(e.key.toLowerCase() === 'i') document.getElementById('inventory').style.display = 
+                (document.getElementById('inventory').style.display === 'block') ? 'none' : 'block';
+        };
+        window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
+
+        function update() {
+            let moving = false;
+            const speed = 4;
+            let oldX = myData.x, oldY = myData.y;
+
+            if (keys['w']) { myData.y -= speed; moving = true; }
+            if (keys['s']) { myData.y += speed; moving = true; }
+            if (keys['a']) { myData.x -= speed; moving = true; myData.dir = -1; }
+            if (keys['d']) { myData.x += speed; moving = true; myData.dir = 1; }
+
+            // Cambiar estados de animación
+            if (keys[' ']) {
+                myData.state = 'attack';
+                checkAttack();
+            } else if (moving) {
+                myData.state = 'walk';
+            } else {
+                myData.state = 'idle';
+            }
+
+            // Animación de respiración/pasos (frames)
+            animTimer++;
+            if(animTimer > 10) {
+                myData.frame = (myData.frame + 1) % 4;
+                if(isHost) slimes.forEach(s => s.frame = (s.frame + 1) % 4);
+                animTimer = 0;
+            }
+
+            // Solo el HOST mueve los slimes
+            if(isHost) {
+                slimes.forEach(s => {
+                    if(s.hp <= 0) return;
+                    // IA simple: seguir al jugador más cercano (solo me sigue a mi por simplicidad)
+                    let dist = Math.hypot(myData.x - s.x, myData.y - s.y);
+                    if(dist < 150) {
+                        s.x += (myData.x - s.x) * 0.01;
+                        s.y += (myData.y - s.y) * 0.01;
+                        if(dist < 20 && Math.random() < 0.05) myData.hp -= 1;
+                    }
+                });
+                broadcast({ type: 'world_sync', slimes: slimes });
+            }
+
+            broadcast({ type: 'player_sync', data: myData });
+            
+            // HUD
+            document.getElementById('hp-bar').style.width = (myData.hp/myData.maxHp)*100 + "%";
+        }
+
+        function checkAttack() {
+            slimes.forEach(s => {
+                let dist = Math.hypot(s.x - myData.x, s.y - myData.y);
+                if(dist < 50 && s.hp > 0) {
+                    if(isHost) s.hp -= myData.atk;
+                    else broadcast({ type: 'slime_damage', id: s.id, dmg: myData.atk });
+                }
+            });
+        }
+
+        // --- RENDERIZADO ---
+        function drawPlayer(p) {
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            
+            // Efecto de rebote según animación
+            let bounce = (p.state === 'walk' || p.state === 'idle') ? Math.sin(p.frame) * 3 : 0;
+            
+            // Cuerpo (con dirección)
+            ctx.scale(p.dir, 1);
+            ctx.fillStyle = p.skin;
+            ctx.fillRect(-15, -15 + bounce, 30, 30);
+            
+            // "Arma" o efecto de ataque
+            if(p.state === 'attack') {
+                ctx.strokeStyle = "white";
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.arc(10, 0, 30, -1, 1);
+                ctx.stroke();
+            }
+
+            ctx.restore();
+            
+            // Nickname
+            ctx.fillStyle = "white";
+            ctx.textAlign = "center";
+            ctx.fillText(p.nick + " (Lv" + p.lv + ")", p.x, p.y - 30);
+        }
+
+        function drawSlime(s) {
+            if(s.hp <= 0) return;
+            let bounce = Math.sin(s.frame) * 4;
+            ctx.fillStyle = "#44ff44";
+            // Cuerpo de Slime (Ovalo)
+            ctx.beginPath();
+            ctx.ellipse(s.x, s.y + 10, 15 + bounce, 10 - bounce, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // Ojos
+            ctx.fillStyle = "black";
+            ctx.fillRect(s.x - 6, s.y + 5, 2, 2);
+            ctx.fillRect(s.x + 4, s.y + 5, 2, 2);
+        }
+
+        function render() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -192,44 +222,28 @@
             ctx.save();
             ctx.translate(camX, camY);
 
-            // Dibujar Árboles
-            ctx.fillStyle = "#224411";
-            trees.forEach(t => {
-                ctx.fillRect(t.x-5, t.y, 10, 15);
-                ctx.beginPath(); ctx.arc(t.x, t.y, 15, 0, Math.PI*2); ctx.fill();
-            });
-
-            // Dibujar Slimes
-            slimes.forEach(s => {
-                if(s.hp <= 0) return;
-                ctx.fillStyle = "rgba(0, 255, 0, 0.6)";
-                ctx.beginPath(); ctx.arc(s.x, s.y, 15, 0, Math.PI*2); ctx.fill();
-                // Barra vida slime
-                ctx.fillStyle = "red"; ctx.fillRect(s.x-15, s.y-25, 30 * (s.hp/s.maxHp), 3);
-            });
-
-            // Dibujar Jugadores
-            const allPlayers = {...remotePlayers, [myData.id]: myData};
-            for(let id in allPlayers) {
-                let p = allPlayers[id];
-                // Arma (Si ataca)
-                if(p.isAttacking) {
-                    ctx.strokeStyle = "white"; ctx.lineWidth = 3;
-                    ctx.beginPath(); ctx.arc(p.x, p.y, 40, 0, Math.PI*2); ctx.stroke();
-                }
-                // Cuerpo
-                ctx.fillStyle = p.skin;
-                ctx.fillRect(p.x-15, p.y-15, 30, 30);
-                // Info
-                ctx.fillStyle = "white"; ctx.textAlign="center";
-                ctx.fillText(`${p.nick} (Lvl ${p.lv})`, p.x, p.y-25);
+            // Suelo (Mundo)
+            ctx.strokeStyle = "rgba(255,255,255,0.1)";
+            for(let i=0; i<=WORLD_SIZE; i+=50) {
+                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, WORLD_SIZE); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(WORLD_SIZE, i); ctx.stroke();
             }
+
+            // Slimes
+            slimes.forEach(drawSlime);
+
+            // Jugadores remotos
+            for(let id in remotePlayers) drawPlayer(remotePlayers[id]);
+            
+            // Jugador Local
+            drawPlayer(myData);
 
             ctx.restore();
             update();
-            requestAnimationFrame(draw);
+            requestAnimationFrame(render);
         }
-        draw();
+
+        render();
     </script>
 </body>
 </html>

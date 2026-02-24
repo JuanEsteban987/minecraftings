@@ -2,48 +2,116 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>RPG REINOS: Minecraft 2D Final</title>
+    <title>RPG REINOS: Edición Deluxe</title>
     <style>
-        body { margin: 0; background: #1a1a1a; overflow: hidden; font-family: 'Segoe UI', Tahoma, sans-serif; color: white; }
+        :root {
+            --primary: #f1c40f;
+            --secondary: #2ecc71;
+            --dark: #2c3e50;
+            --accent: #e74c3c;
+        }
+
+        body { margin: 0; background: #1a1a1a; overflow: hidden; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: white; }
         
-        /* PANTALLA DE INICIO */
+        /* PANTALLA DE INICIO MEJORADA */
         #menu-container {
             position: absolute; width: 100%; height: 100%;
             display: flex; align-items: center; justify-content: center;
-            background: #2c3e50; z-index: 100;
+            background: radial-gradient(circle, #34495e 0%, #1a1a1a 100%);
+            z-index: 100;
+            transition: opacity 0.5s;
         }
         .panel {
-            background: #34495e; padding: 40px; border-radius: 20px;
-            border: 4px solid #f1c40f; text-align: center; box-shadow: 0 0 30px rgba(0,0,0,0.7);
+            background: rgba(52, 73, 94, 0.95);
+            padding: 50px;
+            border-radius: 25px;
+            border: 4px solid var(--primary);
+            text-align: center;
+            box-shadow: 0 0 50px rgba(0,0,0,0.8), inset 0 0 20px rgba(241, 196, 15, 0.2);
+            backdrop-filter: blur(10px);
         }
-        h1 { color: #f1c40f; font-size: 32px; margin-bottom: 20px; text-transform: uppercase; }
-        input { padding: 12px; width: 250px; border-radius: 8px; border: none; margin: 10px 0; font-size: 16px; }
+        h1 { 
+            color: var(--primary); 
+            font-size: 42px; 
+            margin-bottom: 30px; 
+            text-transform: uppercase; 
+            letter-spacing: 5px;
+            text-shadow: 3px 3px 0px #000;
+        }
+        input { 
+            padding: 15px; 
+            width: 280px; 
+            border-radius: 12px; 
+            border: 2px solid transparent; 
+            margin: 12px 0; 
+            font-size: 16px; 
+            background: #ecf0f1;
+            color: #2c3e50;
+            transition: all 0.3s;
+            outline: none;
+        }
+        input:focus { border-color: var(--primary); box-shadow: 0 0 15px var(--primary); }
+        
         button {
-            padding: 15px 30px; background: #27ae60; color: white; border: none;
-            border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 18px; margin-top: 15px;
+            padding: 18px 40px; 
+            background: var(--secondary); 
+            color: white; 
+            border: none;
+            border-radius: 12px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            font-size: 20px; 
+            margin-top: 25px;
+            text-transform: uppercase;
+            box-shadow: 0 6px 0 #27ae60;
+            transition: all 0.1s;
         }
-        button:hover { background: #2ecc71; transform: scale(1.05); }
+        button:hover { background: #2ecc71; transform: translateY(-2px); box-shadow: 0 8px 0 #27ae60; }
+        button:active { transform: translateY(4px); box-shadow: 0 2px 0 #27ae60; }
 
-        /* INTERFAZ DE JUEGO */
+        /* INTERFAZ DE JUEGO (HUD) MEJORADA */
         #game-ui {
-            display: none; position: absolute; top: 15px; left: 15px;
-            background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px; border-left: 5px solid #f1c40f;
+            display: none; 
+            position: absolute; 
+            top: 20px; 
+            left: 20px;
+            background: rgba(0,0,0,0.75); 
+            padding: 20px; 
+            border-radius: 15px; 
+            border-left: 8px solid var(--primary);
+            box-shadow: 5px 5px 15px rgba(0,0,0,0.5);
+            backdrop-filter: blur(5px);
+            min-width: 200px;
         }
+        .stat { 
+            color: #ecf0f1; 
+            font-size: 16px; 
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        b { color: var(--primary); text-shadow: 1px 1px 0 #000; }
+        .controls-hint {
+            margin-top: 15px;
+            font-size: 12px;
+            color: #bdc3c7;
+            border-top: 1px solid rgba(255,255,255,0.2);
+            padding-top: 10px;
+        }
+
         canvas { display: none; image-rendering: pixelated; background: #4a7023; }
-        .stat { color: #bdc3c7; font-size: 14px; }
-        b { color: #f1c40f; }
     </style>
 </head>
 <body>
 
     <div id="menu-container">
         <div class="panel">
-            <h1>🏰 CREAR REINO RPG</h1>
+            <h1>🏰 REINO RPG</h1>
             <input type="text" id="username" placeholder="Nombre de tu Héroe" maxlength="10">
             <br>
             <input type="text" id="reino-name" placeholder="Nombre del Reino">
             <br>
-            <button onclick="iniciarJuego()">ENTRAR AL REINO</button>
+            <button onclick="iniciarJuego()">COMENZAR AVENTURA</button>
         </div>
     </div>
 
@@ -51,7 +119,10 @@
         <div class="stat">REINO: <b id="ui-reino"></b></div>
         <div class="stat">HÉROE: <b id="ui-name"></b></div>
         <div class="stat">ZONA: <b id="ui-zona">Bosque</b></div>
-        <div class="stat" style="margin-top:5px; font-size:11px;">CLICK: Atacar/Construir | WASD: Mover</div>
+        <div class="controls-hint">
+            [WASD] Moverse <br>
+            [CLICK] Atacar/Construir
+        </div>
     </div>
 
     <canvas id="gameCanvas"></canvas>
@@ -71,7 +142,6 @@
             color: "#3498db", attacking: false
         };
 
-        // ZONAS (Colores de fondo por coordenadas)
         function getZona(x, y) {
             if (x < 800) return { nombre: "Bosque Verde", color: "#4a7023" };
             if (x < 1600) return { nombre: "Desierto Maldito", color: "#d4a373" };
@@ -81,31 +151,31 @@
         function iniciarJuego() {
             const u = document.getElementById("username").value;
             const r = document.getElementById("reino-name").value;
-            if(!u || !r) return alert("Completa los campos");
+            if(!u || !r) return alert("Completa los campos para forjar tu destino.");
 
             player.name = u.toUpperCase();
             player.reino = r.toUpperCase();
             
             document.getElementById("ui-name").innerText = player.name;
             document.getElementById("ui-reino").innerText = player.reino;
-            document.getElementById("menu-container").style.display = "none";
-            document.getElementById("game-ui").style.display = "block";
-            canvas.style.display = "block";
+            document.getElementById("menu-container").style.opacity = "0";
+            setTimeout(() => {
+                document.getElementById("menu-container").style.display = "none";
+                document.getElementById("game-ui").style.display = "block";
+                canvas.style.display = "block";
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                gameActive = true;
+                run();
+            }, 500);
 
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-
-            // Crear algunos enemigos iniciales
-            for(let i=0; i<5; i++) {
+            for(let i=0; i<8; i++) {
                 enemies.push({
-                    x: Math.random() * 1000 + 400,
-                    y: Math.random() * 600,
+                    x: Math.random() * 1200 + 400,
+                    y: Math.random() * 800,
                     color: "#e74c3c"
                 });
             }
-
-            gameActive = true;
-            run();
         }
 
         window.addEventListener('keydown', (e) => {
@@ -117,31 +187,26 @@
             if (k === 'a') nx -= TILE;
             if (k === 'd') nx += TILE;
 
-            // Colisión con bloques y límites
             if (!world[`${Math.floor(nx/TILE)},${Math.floor(ny/TILE)}`]) {
                 player.x = nx; player.y = ny;
             }
-            
-            // Actualizar zona en UI
             document.getElementById("ui-zona").innerText = getZona(player.x, player.y).nombre;
         });
 
-        window.addEventListener('mousedown', () => {
+        window.addEventListener('mousedown', (e) => {
             if(!gameActive) return;
             player.attacking = true;
             
-            // Lógica de ataque a enemigos
             enemies = enemies.filter(en => {
                 const dist = Math.hypot(en.x - (player.x + TILE), en.y - player.y);
-                return dist > 60; // Si está cerca de la espada, muere
+                return dist > 60;
             });
 
-            // Construir bloque
-            const gx = Math.floor(window.event.clientX / TILE);
-            const gy = Math.floor(window.event.clientY / TILE);
+            const gx = Math.floor(e.clientX / TILE);
+            const gy = Math.floor(e.clientY / TILE);
             const key = `${gx},${gy}`;
             if(world[key]) delete world[key];
-            else world[key] = "#7f8c8d";
+            else if(!(gx === player.x/TILE && gy === player.y/TILE)) world[key] = "#7f8c8d";
 
             setTimeout(() => player.attacking = false, 150);
         });
@@ -150,46 +215,52 @@
             if(!gameActive) return;
             const zona = getZona(player.x, player.y);
             
-            // Dibujar Fondo de Zona
             ctx.fillStyle = zona.color;
             ctx.fillRect(0,0, canvas.width, canvas.height);
 
-            // Dibujar Bloques
+            // Grid sutil
+            ctx.strokeStyle = "rgba(255,255,255,0.03)";
+            for(let i=0; i<canvas.width; i+=TILE) {
+                ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke();
+            }
+
             for (let key in world) {
                 const [x, y] = key.split(',').map(Number);
                 ctx.fillStyle = world[key];
                 ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
-                ctx.strokeStyle = "rgba(0,0,0,0.2)";
+                ctx.strokeStyle = "rgba(0,0,0,0.4)";
                 ctx.strokeRect(x * TILE, y * TILE, TILE, TILE);
             }
 
-            // Dibujar Enemigos y seguir al jugador
             enemies.forEach(en => {
-                if (Math.random() > 0.98) { // Movimiento lento de persecución
+                if (Math.random() > 0.97) {
                     if(en.x < player.x) en.x += 2; else en.x -= 2;
                     if(en.y < player.y) en.y += 2; else en.y -= 2;
                 }
                 ctx.fillStyle = en.color;
                 ctx.fillRect(en.x, en.y, TILE-10, TILE-10);
                 ctx.fillStyle = "white";
+                ctx.font = "10px Arial";
                 ctx.fillText("¡MONSTRUO!", en.x + 15, en.y - 5);
             });
 
-            // Dibujar Jugador
             ctx.fillStyle = player.color;
             ctx.fillRect(player.x, player.y, TILE, TILE);
+            ctx.strokeStyle = "#000";
+            ctx.strokeRect(player.x, player.y, TILE, TILE);
             
-            // Nametag
             ctx.fillStyle = "white";
-            ctx.font = "bold 12px Arial";
+            ctx.font = "bold 13px Arial";
             ctx.textAlign = "center";
-            ctx.fillText(player.name, player.x + TILE/2, player.y - 10);
+            ctx.shadowColor = "black";
+            ctx.shadowBlur = 4;
+            ctx.fillText(player.name, player.x + TILE/2, player.y - 12);
+            ctx.shadowBlur = 0;
 
-            // ARMA (Espada de Reino)
             if (player.attacking) {
-                ctx.fillStyle = "#f1c40f"; // Color Oro
-                ctx.fillRect(player.x + TILE, player.y + 15, 30, 8); // Hoja
-                ctx.fillStyle = "#8e44ad"; // Mango
+                ctx.fillStyle = "#f1c40f"; 
+                ctx.fillRect(player.x + TILE, player.y + 15, 30, 8);
+                ctx.fillStyle = "#8e44ad";
                 ctx.fillRect(player.x + TILE, player.y + 10, 6, 18);
             }
 

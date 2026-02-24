@@ -1,227 +1,315 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<title>Minecraft RPG 2D Online</title>
-<style>
-body{margin:0;font-family:sans-serif;background:#1b1b1b;color:white;overflow:hidden}
-canvas{display:block}
-.panel{background:#000c;padding:15px;border-radius:12px}
-#menu{
-position:absolute;left:50%;top:50%;
-transform:translate(-50%,-50%);
-width:260px;text-align:center
-}
-input,button,select{
-width:100%;margin:5px 0;padding:6px;border-radius:6px;border:none
-}
-button{background:#3a8;color:white;font-weight:bold;cursor:pointer}
-#ui{
-position:absolute;left:10px;top:10px;
-background:#0008;padding:8px;border-radius:10px;font-size:14px
-}
-#chat{height:90px;overflow:auto;background:#111;margin-top:5px;padding:4px}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RPG Neo Genesis - Ultimate Edition</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        :root { --primary: #38bdf8; --accent: #ef4444; --glass: rgba(15, 23, 42, 0.95); }
+        body { margin: 0; overflow: hidden; background: #070a0e; font-family: 'Segoe UI', sans-serif; color: white; touch-action: none; }
+        canvas { display: block; background: #1a2e1a; }
+        .glass { background: var(--glass); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; }
+        
+        /* Menú Principal */
+        #setup { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 30px; text-align: center; z-index: 1000; width: 85%; max-width: 320px; box-shadow: 0 0 40px rgba(0,0,0,0.8); }
+        input { background: #1e293b; border: 1px solid #334155; color: white; padding: 12px; border-radius: 8px; width: 90%; margin-bottom: 10px; font-size: 16px; }
+        button { background: var(--primary); border: none; padding: 12px; font-weight: bold; border-radius: 8px; cursor: pointer; width: 100%; margin-top: 5px; color: #000; font-size: 14px; text-transform: uppercase; }
+        #status { font-size: 11px; margin-top: 15px; color: var(--primary); min-height: 1.2em; }
+
+        /* HUD */
+        #hud { position: absolute; top: 20px; left: 20px; padding: 12px; min-width: 150px; z-index: 500; display: none; }
+        .hp-bar { height: 8px; background: #334155; border-radius: 4px; margin-top: 8px; overflow: hidden; }
+        #hp-fill { height: 100%; width: 100%; background: var(--accent); transition: 0.3s; }
+        
+        #server-panel { position: absolute; top: 20px; right: 20px; width: 200px; padding: 15px; font-size: 11px; z-index: 500; display: none; }
+        .id-container { background: #1e293b; padding: 8px; border-radius: 6px; margin: 8px 0; color: var(--primary); font-family: monospace; cursor: pointer; border: 1px dashed var(--primary); word-break: break-all; }
+
+        /* Controles Móviles */
+        #mobile-controls { position: absolute; inset: 0; pointer-events: none; display: none; }
+        #joystick-zone { position: absolute; bottom: 50px; left: 50px; width: 100px; height: 100px; background: rgba(255,255,255,0.1); border-radius: 50%; pointer-events: auto; }
+        #joystick-stick { position: absolute; top: 30px; left: 30px; width: 40px; height: 40px; background: var(--primary); border-radius: 50%; pointer-events: none; }
+        #attack-btn { position: absolute; bottom: 60px; right: 50px; width: 75px; height: 75px; background: var(--accent); border-radius: 50%; pointer-events: auto; display: flex; justify-content: center; align-items: center; font-size: 28px; box-shadow: 0 0 20px rgba(239, 68, 68, 0.3); }
+
+        /* Hotbar */
+        #hotbar { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: none; gap: 8px; padding: 8px; }
+        .slot { width: 50px; height: 50px; display: flex; justify-content: center; align-items: center; border-radius: 10px; background: rgba(255,255,255,0.05); cursor: pointer; font-size: 20px; transition: 0.2s; }
+        .slot.active { background: var(--primary); color: #000; transform: translateY(-5px); }
+    </style>
 </head>
 <body>
 
-<div id="menu" class="panel">
-<h3>Minecraft RPG 2D</h3>
-<input id="name" placeholder="Tu nombre">
-<select id="skin">
-<option>😀</option><option>😎</option><option>🤠</option>
-<option>👽</option><option>🤖</option><option>🐸</option>
-<option>🐱</option>
-</select>
-<input id="roomInput" placeholder="Código sala (vacío = crear)">
-<button onclick="enter()">ENTRAR</button>
-</div>
+<div id="game-container">
+    <canvas id="game"></canvas>
+    
+    <div id="setup" class="glass">
+        <h2 style="margin: 0 0 20px 0; color: var(--primary); letter-spacing: 2px;">NEO GENESIS</h2>
+        <input type="text" id="playerName" placeholder="Nombre del Avatar">
+        <button onclick="startHost()">CREAR REINO</button>
+        <div style="margin: 15px; font-size: 10px; opacity: 0.4;">— O ÚNETE A UN REINO —</div>
+        <input type="text" id="joinId" placeholder="ID del Host">
+        <button onclick="startJoin()" style="background: #475569; color: white;">UNIRSE AL MUNDO</button>
+        <div id="status">Esperando órdenes...</div>
+    </div>
 
-<canvas id="c"></canvas>
+    <div id="hud" class="glass">
+        <div id="display-name" style="font-weight: bold; font-size: 14px;">---</div>
+        <div class="hp-bar"><div id="hp-fill"></div></div>
+    </div>
 
-<div id="ui" style="display:none">
-<div>Sala: <span id="roomLabel"></span></div>
-<div id="players"></div>
-<div id="chat"></div>
-<input id="msg" placeholder="chat">
+    <div id="server-panel" class="glass">
+        <strong style="letter-spacing: 1px;">ID DEL REINO</strong>
+        <div class="id-container" id="id-display" onclick="copyId()">Generando...</div>
+        <div style="font-size: 9px; opacity: 0.5; margin-bottom: 10px;">(Toca el ID para copiar)</div>
+        <strong style="letter-spacing: 1px;">GUERREROS</strong>
+        <div id="player-list" style="margin-top: 5px; color: var(--primary);"></div>
+    </div>
+
+    <div id="mobile-controls">
+        <div id="joystick-zone"><div id="joystick-stick"></div></div>
+        <div id="attack-btn">⚔️</div>
+    </div>
+
+    <div id="hotbar" class="glass">
+        <div class="slot active" onclick="setSlot(1)">👊</div>
+        <div class="slot" onclick="setSlot(2)">⚔️</div>
+        <div class="slot" onclick="setSlot(3)">🧱</div>
+    </div>
 </div>
 
 <script>
-const canvas=document.getElementById("c");
-const ctx=canvas.getContext("2d");
-canvas.width=innerWidth;
-canvas.height=innerHeight;
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 
-let ws,room,myId=Math.random().toString(36).substr(2,9);
-let peers={},players={},keys={},started=false;
+let world = [], players = {}, slimes = [], connections = {}, peer = null;
+let myId = null, isHost = false, selectedSlot = 1, isDead = false;
+let camera = { x: 0, y: 0 }, keys = {};
+let me = { x: 1000, y: 1000, targetX: 1000, targetY: 1000, name: "", color: "cyan", item: 1, hp: 100 };
 
-let me={x:1500,y:1500,emoji:"😀",name:"Player"};
-players[myId]=me;
+const isMobile = ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+if(isMobile) document.getElementById('mobile-controls').style.display = 'block';
 
-const TREES=[];
-for(let i=0;i<40;i++)
-TREES.push({x:Math.random()*3000,y:Math.random()*3000});
+// --- FUNCIONES DE RED ---
 
-function enter(){
-me.name=document.getElementById("name").value||"Player";
-me.emoji=document.getElementById("skin").value;
-room=document.getElementById("roomInput").value||Math.random().toString(36).substr(2,6);
+function startHost() {
+    const name = document.getElementById('playerName').value;
+    if(!name) return alert("Escribe tu nombre");
+    
+    document.getElementById('status').innerText = "Conectando con la red P2P...";
+    me.name = name;
+    isHost = true;
 
-document.getElementById("menu").style.display="none";
-document.getElementById("ui").style.display="block";
-document.getElementById("roomLabel").innerText=room;
+    // Generar datos antes de PeerJS para evitar lag
+    for(let x=0; x<40; x++){ world[x]=[]; for(let y=0; y<40; y++) world[x][y]=Math.random()<0.07?1:0; }
+    for(let i=0; i<6; i++) slimes.push({id: Math.random(), x: 1100+Math.random()*300, y: 1100+Math.random()*300});
 
-connect();
-started=true;
+    if(peer) peer.destroy();
+    peer = new Peer();
+
+    peer.on('open', id => {
+        myId = id;
+        players[id] = me;
+        document.getElementById('id-display').innerText = id;
+        initGame();
+    });
+
+    peer.on('connection', conn => {
+        conn.on('open', () => {
+            connections[conn.peer] = conn;
+            conn.send({ type: 'init', world, players, slimes });
+        });
+        conn.on('data', data => handleData(data, conn.peer));
+        conn.on('close', () => removePlayer(conn.peer));
+    });
+
+    peer.on('error', handleNetworkError);
 }
 
-function connect(){
-ws=new WebSocket("wss://y-webrtc-signaling-eu.herokuapp.com");
+function startJoin() {
+    const hostId = document.getElementById('joinId').value.trim();
+    const name = document.getElementById('playerName').value;
+    if(!hostId || !name) return alert("Falta ID o Nombre");
 
-ws.onopen=()=>{
-ws.send(JSON.stringify({type:"join",room,from:myId}));
+    document.getElementById('status').innerText = "Buscando portal al Reino...";
+    me.name = name;
+    isHost = false;
 
-// anuncio presencia cada 2s para detectar jugadores
-setInterval(()=>{
-ws.send(JSON.stringify({type:"announce",room,from:myId}));
-},2000);
-};
+    if(peer) peer.destroy();
+    peer = new Peer();
 
-ws.onmessage=async e=>{
-let msg=JSON.parse(e.data);
-if(msg.from===myId) return;
-
-if(msg.type==="announce"){
-if(!peers[msg.from]){
-let pc=createPeer(msg.from,true);
-let offer=await pc.createOffer();
-await pc.setLocalDescription(offer);
-ws.send(JSON.stringify({type:"offer",offer,to:msg.from,room,from:myId}));
-}
-}
-
-if(msg.type==="offer"){
-let pc=createPeer(msg.from,false);
-await pc.setRemoteDescription(msg.offer);
-let ans=await pc.createAnswer();
-await pc.setLocalDescription(ans);
-ws.send(JSON.stringify({type:"answer",answer:ans,to:msg.from,room,from:myId}));
+    peer.on('open', id => {
+        myId = id;
+        players[id] = me;
+        const conn = peer.connect(hostId);
+        conn.on('open', () => {
+            connections[hostId] = conn;
+            conn.send({ type: 'join', p: me });
+            initGame();
+        });
+        conn.on('data', data => handleData(data, hostId));
+        conn.on('error', handleNetworkError);
+    });
 }
 
-if(msg.type==="answer"){
-await peers[msg.from].setRemoteDescription(msg.answer);
+function handleNetworkError(err) {
+    let msg = "Error de conexión";
+    if(err.type === 'network') msg = "Error de Network: Revisa tu Wi-Fi";
+    if(err.type === 'peer-point-unavailable') msg = "ID no encontrado";
+    document.getElementById('status').innerText = msg;
+    console.error(err.type);
 }
 
-if(msg.type==="candidate"){
-if(peers[msg.from])
-await peers[msg.from].addIceCandidate(msg.candidate);
-}
-};
-}
-
-function createPeer(id,init){
-let pc=new RTCPeerConnection({
-iceServers:[{urls:"stun:stun.l.google.com:19302"}]
-});
-peers[id]=pc;
-
-if(init){
-let dc=pc.createDataChannel("game");
-setupDC(id,dc);
-}
-pc.ondatachannel=e=>setupDC(id,e.channel);
-
-pc.onicecandidate=e=>{
-if(e.candidate){
-ws.send(JSON.stringify({
-type:"candidate",
-candidate:e.candidate,
-to:id,room,from:myId
-}));
-}
-};
-return pc;
+function handleData(data, senderId) {
+    if (data.type === 'init') { world = data.world; players = data.players; slimes = data.slimes; players[myId] = me; }
+    if (data.type === 'join') { players[senderId] = data.p; if(isHost) broadcast({ type: 'new', id: senderId, p: data.p }); updateUI(); }
+    if (data.type === 'new') { players[data.id] = data.p; updateUI(); }
+    if (data.type === 'sync') {
+        if(!players[senderId]) return;
+        players[senderId].targetX = data.x; players[senderId].targetY = data.y;
+        players[senderId].item = data.item; players[senderId].hp = data.hp;
+        if(isHost) broadcast(data, senderId);
+    }
+    if (data.type === 'hit' && data.targetId === myId) takeDamage(10);
+    if (data.type === 'leave') removePlayer(data.id);
+    if (data.type === 'slime_update' && !isHost) slimes = data.slimes;
 }
 
-function setupDC(id,dc){
-dc.onmessage=e=>{
-let data=JSON.parse(e.data);
-if(data.type==="state") players[id]=data.player;
-if(data.type==="chat") addChat(data.name+": "+data.msg);
-};
-peers[id].dc=dc;
+function removePlayer(id) {
+    delete players[id];
+    delete connections[id];
+    if(isHost) broadcast({ type: 'leave', id: id });
+    updateUI();
 }
 
-function sendState(){
-for(let id in peers){
-let dc=peers[id].dc;
-if(dc && dc.readyState==="open")
-dc.send(JSON.stringify({type:"state",player:me}));
-}
+function broadcast(data, skip = null) {
+    for(let id in connections) if(id !== skip) connections[id].send(data);
 }
 
-function sendChat(m){
-for(let id in peers){
-let dc=peers[id].dc;
-if(dc && dc.readyState==="open")
-dc.send(JSON.stringify({type:"chat",msg:m,name:me.name}));
-}
-addChat(me.name+": "+m);
-}
+// --- LOGICA DE JUEGO ---
 
-document.getElementById("msg").onkeydown=e=>{
-if(e.key==="Enter"){
-sendChat(e.target.value);
-e.target.value="";
-}
-};
+let moveDir = { x: 0, y: 0 };
+if(isMobile) {
+    const zone = document.getElementById('joystick-zone');
+    const stick = document.getElementById('joystick-stick');
+    zone.addEventListener('touchstart', e => handleJoy(e));
+    zone.addEventListener('touchmove', e => handleJoy(e));
+    zone.addEventListener('touchend', () => { moveDir = {x:0, y:0}; stick.style.transform = `translate(0,0)`; });
+    document.getElementById('attack-btn').addEventListener('touchstart', (e) => { e.preventDefault(); interact(); });
 
-function addChat(t){
-let c=document.getElementById("chat");
-c.innerHTML+=t+"<br>";
-c.scrollTop=9999;
-}
-
-addEventListener("keydown",e=>keys[e.key]=true);
-addEventListener("keyup",e=>keys[e.key]=false);
-
-function update(){
-if(!started)return;
-let sp=4;
-if(keys["w"])me.y-=sp;
-if(keys["s"])me.y+=sp;
-if(keys["a"])me.x-=sp;
-if(keys["d"])me.x+=sp;
-sendState();
+    function handleJoy(e) {
+        e.preventDefault();
+        const t = e.touches[0];
+        const rect = zone.getBoundingClientRect();
+        const dx = t.clientX - (rect.left + 50);
+        const dy = t.clientY - (rect.top + 50);
+        const dist = Math.min(35, Math.hypot(dx, dy));
+        const angle = Math.atan2(dy, dx);
+        moveDir.x = Math.cos(angle) * (dist/35);
+        moveDir.y = Math.sin(angle) * (dist/35);
+        stick.style.transform = `translate(${Math.cos(angle)*dist}px, ${Math.sin(angle)*dist}px)`;
+    }
 }
 
-function draw(){
-ctx.fillStyle="#3a7";
-ctx.fillRect(0,0,canvas.width,canvas.height);
-if(!started)return;
-
-let camX=me.x-canvas.width/2;
-let camY=me.y-canvas.height/2;
-
-for(let t of TREES){
-ctx.font="28px serif";
-ctx.fillText("🌳",t.x-camX,t.y-camY);
+function initGame() {
+    document.getElementById('setup').style.display = 'none';
+    document.getElementById('hud').style.display = 'block';
+    document.getElementById('server-panel').style.display = 'block';
+    document.getElementById('hotbar').style.display = 'flex';
+    document.getElementById('display-name').innerText = me.name;
+    
+    window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+    window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+    canvas.addEventListener('mousedown', interact);
+    
+    updateUI();
+    requestAnimationFrame(loop);
 }
 
-for(let id in players){
-let p=players[id];
-ctx.font="26px serif";
-ctx.fillText(p.emoji,p.x-camX,p.y-camY);
-ctx.font="12px sans-serif";
-ctx.fillText(p.name,p.x-camX-10,p.y-camY-12);
+function interact() {
+    if(isDead || selectedSlot !== 2) return;
+    for(let id in players) {
+        if(id === myId) continue;
+        if(Math.hypot(players[id].x - me.x, players[id].y - me.y) < 80) {
+            let h = { type: 'hit', targetId: id };
+            if(isHost) broadcast(h); else connections[Object.keys(connections)[0]].send(h);
+        }
+    }
 }
 
-document.getElementById("players").innerHTML=
-"👥 "+Object.keys(players).length+" jugadores";
+function loop() {
+    const v = 5;
+    if(!isDead) {
+        if(isMobile) { me.x += moveDir.x*v; me.y += moveDir.y*v; }
+        else {
+            if(keys['a']) me.x -= v; if(keys['d']) me.x += v;
+            if(keys['w']) me.y -= v; if(keys['s']) me.y += v;
+        }
+    }
+    players[myId] = me;
+    camera.x = me.x - canvas.width/2; camera.y = me.y - canvas.height/2;
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.save(); ctx.translate(-camera.x, -camera.y);
+
+    // MUNDO
+    ctx.fillStyle = "#1e3a1e";
+    for(let x=0; x<world.length; x++) for(let y=0; y<world[x].length; y++)
+        if(world[x][y] === 1) { ctx.beginPath(); ctx.arc(x*64+32, y*64+32, 25, 0, 7); ctx.fill(); }
+
+    // SLIMES
+    if(isHost) {
+        slimes.forEach(s => {
+            let a = Math.atan2(me.y-s.y, me.x-s.x);
+            s.x += Math.cos(a)*1.3; s.y += Math.sin(a)*1.3;
+            if(Math.hypot(me.x-s.x, me.y-s.y)<30) takeDamage(0.15);
+        });
+        broadcast({ type: 'slime_update', slimes });
+    }
+    ctx.fillStyle = "#4ade80";
+    slimes.forEach(s => { ctx.beginPath(); ctx.ellipse(s.x, s.y, 15, 12, 0, 0, 7); ctx.fill(); });
+
+    // JUGADORES
+    for(let id in players) {
+        let p = players[id];
+        if(id !== myId) { p.x += (p.targetX - p.x)*0.2; p.y += (p.targetY - p.y)*0.2; }
+        else { broadcast({ type:'sync', x:me.x, y:me.y, item:me.item, hp:me.hp }); }
+        
+        ctx.fillStyle = id === myId ? "#38bdf8" : "#f472b6";
+        ctx.fillRect(p.x-15, p.y-20, 30, 40);
+        ctx.fillStyle = "white"; ctx.textAlign="center"; ctx.font="bold 12px Arial"; ctx.fillText(p.name, p.x, p.y-25);
+    }
+
+    ctx.restore();
+    requestAnimationFrame(loop);
 }
 
-function loop(){update();draw();requestAnimationFrame(loop);}
-loop();
+function takeDamage(a) { 
+    me.hp -= a; 
+    document.getElementById('hp-fill').style.width = Math.max(0, me.hp) + "%"; 
+    if(me.hp <= 0 && !isDead) { isDead = true; alert("GAME OVER - Recargando Reino..."); location.reload(); } 
+}
+
+function setSlot(n) { 
+    selectedSlot = n; me.item = n; 
+    document.querySelectorAll('.slot').forEach((s,i) => s.classList.toggle('active', i === n-1)); 
+}
+
+function updateUI() {
+    document.getElementById('player-list').innerHTML = Object.values(players).map(p => `• ${p.name}`).join('<br>');
+}
+
+function copyId() {
+    const idText = document.getElementById('id-display').innerText;
+    navigator.clipboard.writeText(idText).then(() => {
+        const status = document.getElementById('status');
+        alert("ID Copiado: " + idText);
+    });
+}
+
+// Limpiar al salir
+window.onbeforeunload = () => { if(peer) peer.destroy(); };
 </script>
 </body>
 </html>

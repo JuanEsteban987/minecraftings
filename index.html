@@ -7,7 +7,17 @@
     <style>
         body { font-family: 'Courier New', monospace; margin: 0; overflow: hidden; background: #1a1a1a; color: white; }
         canvas { background: #2d5a27; display: block; }
-        .ui-panel { position: absolute; top: 10px; left: 10px; z-index: 10; padding: 10px; background: rgba(0,0,0,0.8); border: 2px solid #555; }
+        
+        /* Paneles UI */
+        .ui-panel { position: absolute; top: 10px; left: 10px; z-index: 10; padding: 10px; background: rgba(0,0,0,0.8); border: 2px solid #555; font-size: 12px; }
+        
+        /* NUEVO: Menú de Ropa y Personalización en la esquina derecha */
+        .custom-panel { position: absolute; top: 10px; right: 10px; z-index: 10; padding: 15px; background: rgba(40, 40, 40, 0.9); border: 3px solid #8b4513; width: 180px; }
+        .custom-panel h4 { margin: 0 0 10px 0; color: #ffd700; text-align: center; }
+        .item-row { margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .item-row input[type="color"] { border: none; width: 30px; height: 20px; cursor: pointer; }
+        .item-row input[type="text"] { width: 80px; background: #111; color: #0f0; border: 1px solid #555; padding: 2px; }
+
         #hud { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); text-align: center; pointer-events: none; }
         .bar { width: 200px; height: 10px; background: #444; border: 1px solid #000; margin: 5px; }
         .hp-fill { background: #ff3333; height: 100%; width: 100%; transition: width 0.2s; }
@@ -18,19 +28,35 @@
 
     <div class="ui-panel">
         ID: <span id="my-id" style="color:#0f0">...</span><br>
-        <input type="text" id="target-id" placeholder="ID Amigo">
+        <input type="text" id="target-id" placeholder="ID Amigo" style="width: 100px;">
         <button onclick="connectToPeer()">Conectar</button>
-        <div id="host-status" style="font-size: 10px; color: #aaa; margin-top:5px;">Eres el Host (Líder del mapa)</div>
+        <div id="host-status" style="font-size: 9px; color: #aaa; margin-top:5px;">Iniciando...</div>
+    </div>
+
+    <div class="custom-panel">
+        <h4>PERSONALIZAR</h4>
+        <div class="item-row">
+            <span>Nombre:</span>
+            <input type="text" id="change-nick" value="Heroe" maxlength="10" oninput="updateAppearance()">
+        </div>
+        <div class="item-row">
+            <span>Ropa:</span>
+            <input type="color" id="change-skin" value="#ffd700" onchange="updateAppearance()">
+        </div>
+        <div class="item-row">
+            <span>Accesorio:</span>
+            <input type="color" id="change-acc" value="#ff0000" onchange="updateAppearance()">
+        </div>
     </div>
 
     <div id="hud">
         <div id="player-tag">Nivel 1</div>
         <div class="bar"><div id="hp-bar" class="hp-fill"></div></div>
-        <small>[WASD] Mover - [Espacio] Atacar - [I] Stats</small>
+        <small>[WASD] Mover - [Espacio] Atacar - [I] Inventario</small>
     </div>
 
     <div id="inventory">
-        <h2 style="text-align:center; color: gold;">INVENTARIO</h2>
+        <h2 style="text-align:center; color: gold;">STATS</h2>
         <p>Nivel: <span id="st-lv">1</span></p>
         <p>Ataque: <span id="st-atk">10</span></p>
         <p>HP Máx: <span id="st-hp">100</span></p>
@@ -43,13 +69,13 @@
         const ctx = canvas.getContext('2d');
         const peer = new Peer();
 
-        // --- CONFIGURACIÓN ---
         const WORLD_SIZE = 1500;
-        let isHost = true; // Por defecto el primero es host
+        let isHost = true;
         let myData = { 
-            id: '', x: 750, y: 750, nick: "Heroe", skin: "#ffd700", 
+            id: '', x: 750, y: 750, 
+            nick: "Heroe", skin: "#ffd700", acc: "#ff0000", // Añadido color de accesorio
             lv: 1, xp: 0, hp: 100, maxHp: 100, atk: 10, 
-            state: 'idle', frame: 0, dir: 1 // dir: 1 derecha, -1 izquierda
+            state: 'idle', frame: 0, dir: 1 
         };
         
         let peers = {};
@@ -57,21 +83,29 @@
         let slimes = [];
         let animTimer = 0;
 
-        // --- RED ---
+        // Función para actualizar apariencia desde el menú UI
+        function updateAppearance() {
+            myData.nick = document.getElementById('change-nick').value;
+            myData.skin = document.getElementById('change-skin').value;
+            myData.acc = document.getElementById('change-acc').value;
+            broadcast({ type: 'player_sync', data: myData });
+        }
+
+        // --- LÓGICA RED (PeerJS) ---
         peer.on('open', (id) => { 
             myData.id = id; 
             document.getElementById('my-id').innerText = id; 
         });
 
         peer.on('connection', (conn) => {
-            isHost = true; // Si alguien se conecta a ti, tú eres el Host
-            document.getElementById('host-status').innerText = "Estado: HOST (Sincronizando Slimes)";
+            isHost = true;
+            document.getElementById('host-status').innerText = "Estado: HOST";
             setupConnection(conn);
         });
 
         function connectToPeer() {
-            isHost = false; // Si tú te conectas a alguien, él es el Host
-            document.getElementById('host-status').innerText = "Estado: CLIENTE (Recibiendo datos)";
+            isHost = false;
+            document.getElementById('host-status').innerText = "Estado: CLIENTE";
             setupConnection(peer.connect(document.getElementById('target-id').value));
         }
 
@@ -79,11 +113,8 @@
             peers[conn.peer] = conn;
             conn.on('data', (data) => {
                 if (data.type === 'player_sync') remotePlayers[data.data.id] = data.data;
-                if (data.type === 'world_sync') {
-                    slimes = data.slimes; // Los clientes reciben la posición de los slimes del host
-                }
+                if (data.type === 'world_sync') slimes = data.slimes;
                 if (data.type === 'slime_damage' && isHost) {
-                    // El Host procesa el daño
                     let s = slimes.find(s => s.id === data.id);
                     if(s) s.hp -= data.dmg;
                 }
@@ -94,9 +125,8 @@
             for(let id in peers) peers[id].send(msg);
         }
 
-        // --- LÓGICA DE JUEGO ---
         if(isHost) {
-            for(let i=0; i<8; i++) {
+            for(let i=0; i<10; i++) {
                 slimes.push({ id: i, x: Math.random()*WORLD_SIZE, y: Math.random()*WORLD_SIZE, hp: 40, maxHp: 40, frame: 0 });
             }
         }
@@ -104,22 +134,24 @@
         const keys = {};
         window.onkeydown = (e) => {
             keys[e.key.toLowerCase()] = true;
-            if(e.key.toLowerCase() === 'i') document.getElementById('inventory').style.display = 
-                (document.getElementById('inventory').style.display === 'block') ? 'none' : 'block';
+            if(e.key.toLowerCase() === 'i') {
+                const inv = document.getElementById('inventory');
+                inv.style.display = (inv.style.display === 'block') ? 'none' : 'block';
+                document.getElementById('st-lv').innerText = myData.lv;
+                document.getElementById('st-atk').innerText = myData.atk;
+                document.getElementById('st-hp').innerText = myData.maxHp;
+            }
         };
         window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
 
         function update() {
             let moving = false;
             const speed = 4;
-            let oldX = myData.x, oldY = myData.y;
-
             if (keys['w']) { myData.y -= speed; moving = true; }
             if (keys['s']) { myData.y += speed; moving = true; }
             if (keys['a']) { myData.x -= speed; moving = true; myData.dir = -1; }
             if (keys['d']) { myData.x += speed; moving = true; myData.dir = 1; }
 
-            // Cambiar estados de animación
             if (keys[' ']) {
                 myData.state = 'attack';
                 checkAttack();
@@ -129,7 +161,6 @@
                 myData.state = 'idle';
             }
 
-            // Animación de respiración/pasos (frames)
             animTimer++;
             if(animTimer > 10) {
                 myData.frame = (myData.frame + 1) % 4;
@@ -137,11 +168,9 @@
                 animTimer = 0;
             }
 
-            // Solo el HOST mueve los slimes
             if(isHost) {
                 slimes.forEach(s => {
                     if(s.hp <= 0) return;
-                    // IA simple: seguir al jugador más cercano (solo me sigue a mi por simplicidad)
                     let dist = Math.hypot(myData.x - s.x, myData.y - s.y);
                     if(dist < 150) {
                         s.x += (myData.x - s.x) * 0.01;
@@ -151,11 +180,9 @@
                 });
                 broadcast({ type: 'world_sync', slimes: slimes });
             }
-
             broadcast({ type: 'player_sync', data: myData });
-            
-            // HUD
             document.getElementById('hp-bar').style.width = (myData.hp/myData.maxHp)*100 + "%";
+            document.getElementById('player-tag').innerText = `Nivel ${myData.lv} - ${myData.nick}`;
         }
 
         function checkAttack() {
@@ -168,81 +195,64 @@
             });
         }
 
-        // --- RENDERIZADO ---
+        // --- DIBUJO ---
         function drawPlayer(p) {
             ctx.save();
             ctx.translate(p.x, p.y);
-            
-            // Efecto de rebote según animación
             let bounce = (p.state === 'walk' || p.state === 'idle') ? Math.sin(p.frame) * 3 : 0;
-            
-            // Cuerpo (con dirección)
             ctx.scale(p.dir, 1);
+            
+            // Cuerpo (Ropa)
             ctx.fillStyle = p.skin;
             ctx.fillRect(-15, -15 + bounce, 30, 30);
             
-            // "Arma" o efecto de ataque
+            // Accesorio (Cinturón o banda)
+            ctx.fillStyle = p.acc || "#ff0000";
+            ctx.fillRect(-15, -2 + bounce, 30, 5); 
+            
             if(p.state === 'attack') {
-                ctx.strokeStyle = "white";
-                ctx.lineWidth = 4;
-                ctx.beginPath();
-                ctx.arc(10, 0, 30, -1, 1);
-                ctx.stroke();
+                ctx.strokeStyle = "white"; ctx.lineWidth = 4;
+                ctx.beginPath(); ctx.arc(10, 0, 30, -1, 1); ctx.stroke();
             }
-
             ctx.restore();
             
-            // Nickname
-            ctx.fillStyle = "white";
-            ctx.textAlign = "center";
-            ctx.fillText(p.nick + " (Lv" + p.lv + ")", p.x, p.y - 30);
+            ctx.fillStyle = "white"; ctx.textAlign = "center"; ctx.font = "12px Arial";
+            ctx.fillText(p.nick, p.x, p.y - 35);
         }
 
         function drawSlime(s) {
             if(s.hp <= 0) return;
             let bounce = Math.sin(s.frame) * 4;
             ctx.fillStyle = "#44ff44";
-            // Cuerpo de Slime (Ovalo)
             ctx.beginPath();
             ctx.ellipse(s.x, s.y + 10, 15 + bounce, 10 - bounce, 0, 0, Math.PI * 2);
             ctx.fill();
-            // Ojos
-            ctx.fillStyle = "black";
-            ctx.fillRect(s.x - 6, s.y + 5, 2, 2);
-            ctx.fillRect(s.x + 4, s.y + 5, 2, 2);
         }
 
         function render() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
             const camX = canvas.width/2 - myData.x;
             const camY = canvas.height/2 - myData.y;
             ctx.save();
             ctx.translate(camX, camY);
 
-            // Suelo (Mundo)
-            ctx.strokeStyle = "rgba(255,255,255,0.1)";
-            for(let i=0; i<=WORLD_SIZE; i+=50) {
+            // Suelo
+            ctx.strokeStyle = "rgba(255,255,255,0.05)";
+            for(let i=0; i<=WORLD_SIZE; i+=100) {
                 ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, WORLD_SIZE); ctx.stroke();
                 ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(WORLD_SIZE, i); ctx.stroke();
             }
 
-            // Slimes
             slimes.forEach(drawSlime);
-
-            // Jugadores remotos
             for(let id in remotePlayers) drawPlayer(remotePlayers[id]);
-            
-            // Jugador Local
             drawPlayer(myData);
 
             ctx.restore();
             update();
             requestAnimationFrame(render);
         }
-
         render();
     </script>
 </body>

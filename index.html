@@ -2,28 +2,26 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>RPG P2P: Menú & Mouse Aim</title>
+    <title>RPG P2P: Fix IA & Conexión</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         body { font-family: 'Courier New', monospace; margin: 0; overflow: hidden; background: #1a1a1a; color: white; }
-        canvas { background: #2d5a27; display: none; } /* Oculto hasta empezar */
+        canvas { background: #2d5a27; display: none; }
         
-        /* MENU PRINCIPAL */
         #main-menu {
             position: absolute; width: 100%; height: 100%; background: radial-gradient(#2d5a27, #1a1a1a);
             display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100;
         }
-        .menu-box { background: rgba(0,0,0,0.8); padding: 30px; border: 4px solid #8b4513; border-radius: 15px; text-align: center; }
-        .menu-box input, .menu-box button, .menu-box select { margin: 10px; padding: 10px; font-size: 16px; border-radius: 5px; border: none; }
-        .menu-box button { cursor: pointer; background: #ffd700; font-weight: bold; }
-        .menu-box button:hover { background: #fff; }
+        .menu-box { background: rgba(0,0,0,0.9); padding: 30px; border: 4px solid #8b4513; border-radius: 15px; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        input, button { margin: 10px; padding: 12px; font-size: 16px; border-radius: 5px; border: none; }
+        button { cursor: pointer; background: #ffd700; font-weight: bold; transition: 0.2s; }
+        button:hover { background: #fff; transform: scale(1.05); }
 
-        /* UI JUEGO */
         .ui-panel { position: absolute; top: 10px; left: 10px; z-index: 10; padding: 10px; background: rgba(0,0,0,0.8); border: 2px solid #555; display: none; }
         .custom-panel { position: absolute; top: 10px; right: 10px; z-index: 10; padding: 15px; background: rgba(40, 40, 40, 0.9); border: 3px solid #8b4513; width: 180px; display: none; }
         #hud { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); text-align: center; pointer-events: none; display: none; }
-        .bar { width: 200px; height: 10px; background: #444; border: 1px solid #000; margin: 5px; }
-        .hp-fill { background: #ff3333; height: 100%; width: 100%; transition: width 0.2s; }
+        .bar { width: 200px; height: 12px; background: #444; border: 1px solid #000; margin: 5px; overflow: hidden; }
+        .hp-fill { background: #ff3333; height: 100%; width: 100%; }
         #inventory { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 250px; background: #333; border: 4px solid #8b4513; padding: 20px; display: none; z-index: 20; }
     </style>
 </head>
@@ -31,33 +29,34 @@
 
     <div id="main-menu">
         <div class="menu-box">
-            <h1 style="color: #ffd700;">2D P2P RPG</h1>
-            <div>
-                <input type="text" id="init-nick" placeholder="Tu Nombre" maxlength="10">
-            </div>
+            <h1 style="color: #ffd700;">MULTIPLAYER RPG</h1>
+            <input type="text" id="init-nick" placeholder="Tu Nombre" maxlength="10">
             <div>
                 Ropa: <input type="color" id="init-skin" value="#ffd700">
-                Acc: <input type="color" id="init-acc" value="#ff0000">
+                Accesorio: <input type="color" id="init-acc" value="#ff0000">
             </div>
-            <hr>
+            <hr style="border: 1px solid #444;">
             <button onclick="startAsHost()">CREAR SALA (HOST)</button>
-            <div style="margin-top: 20px;">
-                <input type="text" id="join-id" placeholder="ID de la sala">
-                <button onclick="startAsClient()">UNIRSE</button>
+            <div style="margin-top: 10px;">
+                <input type="text" id="join-id" placeholder="ID del Host">
+                <button onclick="startAsClient()">UNIRSE A SALA</button>
             </div>
         </div>
     </div>
 
     <div class="ui-panel" id="panel-left">
-        ID Sala: <span id="my-id" style="color:#0f0">...</span><br>
+        ID Sala: <span id="my-id" style="color:#0f0; font-weight: bold;">...</span><br>
         <div id="host-status">Estado: Iniciando...</div>
+        <div id="player-count">Jugadores: 1</div>
     </div>
 
     <div class="custom-panel" id="panel-right">
-        <h4>PERSONALIZAR</h4>
-        <input type="text" id="live-nick" oninput="updateAppearance()" placeholder="Nick" style="width:100%">
-        <input type="color" id="live-skin" onchange="updateAppearance()">
-        <input type="color" id="live-acc" onchange="updateAppearance()">
+        <h4 style="margin:0 0 10px 0; color:gold">ESTILO</h4>
+        <input type="text" id="live-nick" oninput="updateAppearance()" placeholder="Nick" style="width:90%">
+        <div style="display:flex; justify-content: space-around; margin-top:10px;">
+            <input type="color" id="live-skin" onchange="updateAppearance()">
+            <input type="color" id="live-acc" onchange="updateAppearance()">
+        </div>
     </div>
 
     <div id="hud">
@@ -70,7 +69,7 @@
         <h2 style="text-align:center; color: gold;">STATS</h2>
         <p>Nivel: <span id="st-lv">1</span></p>
         <p>Ataque: <span id="st-atk">10</span></p>
-        <p>HP Máx: <span id="st-hp">100</span></p>
+        <p>Vida: <span id="st-hp">100/100</span></p>
     </div>
 
     <canvas id="game"></canvas>
@@ -83,13 +82,9 @@
         const WORLD_SIZE = 1500;
         let isHost = true;
         let gameActive = false;
-        let mousePos = { x: 0, y: 0 };
-        
         let myData = { 
-            id: '', x: 750, y: 750, 
-            nick: "Heroe", skin: "#ffd700", acc: "#ff0000",
-            lv: 1, xp: 0, hp: 100, maxHp: 100, atk: 10, 
-            state: 'idle', frame: 0, dir: 1, angle: 0
+            id: '', x: 750, y: 750, nick: "Heroe", skin: "#ffd700", acc: "#ff0000",
+            lv: 1, xp: 0, hp: 100, maxHp: 100, atk: 10, state: 'idle', frame: 0, dir: 1, angle: 0
         };
         
         let peers = {};
@@ -97,29 +92,26 @@
         let slimes = [];
         let animTimer = 0;
 
-        // --- FUNCIONES DE INICIO ---
         function startAsHost() {
             isHost = true;
             applyInitialSettings();
             initGame();
-            document.getElementById('host-status').innerText = "Estado: HOST (Esperando jugadores)";
+            document.getElementById('host-status').innerText = "Estado: HOST (Esperando...)";
         }
 
         function startAsClient() {
             const targetId = document.getElementById('join-id').value;
-            if(!targetId) return alert("Pon el ID del Host");
+            if(!targetId) return alert("Introduce el ID del Host");
             isHost = false;
             applyInitialSettings();
             initGame();
             setupConnection(peer.connect(targetId));
-            document.getElementById('host-status').innerText = "Estado: CLIENTE";
         }
 
         function applyInitialSettings() {
             myData.nick = document.getElementById('init-nick').value || "Heroe";
             myData.skin = document.getElementById('init-skin').value;
             myData.acc = document.getElementById('init-acc').value;
-            // Sincronizar con los inputs del panel lateral
             document.getElementById('live-nick').value = myData.nick;
             document.getElementById('live-skin').value = myData.skin;
             document.getElementById('live-acc').value = myData.acc;
@@ -131,26 +123,30 @@
             document.getElementById('game').style.display = 'block';
             document.querySelectorAll('.ui-panel, .custom-panel, #hud').forEach(el => el.style.display = 'block');
             if(isHost) {
-                for(let i=0; i<12; i++) {
+                for(let i=0; i<15; i++) {
                     slimes.push({ id: i, x: Math.random()*WORLD_SIZE, y: Math.random()*WORLD_SIZE, hp: 40, maxHp: 40, frame: 0 });
                 }
             }
             render();
         }
 
-        // --- RED ---
         peer.on('open', (id) => { 
             myData.id = id; 
             document.getElementById('my-id').innerText = id; 
         });
 
         peer.on('connection', (conn) => {
-            isHost = true;
             setupConnection(conn);
         });
 
         function setupConnection(conn) {
             peers[conn.peer] = conn;
+            conn.on('open', () => {
+                updatePlayerCount();
+                if(isHost) document.getElementById('host-status').innerText = "Estado: HOST (Jugadores unidos)";
+                else document.getElementById('host-status').innerText = "Estado: CLIENTE (Conectado)";
+            });
+
             conn.on('data', (data) => {
                 if (data.type === 'player_sync') remotePlayers[data.data.id] = data.data;
                 if (data.type === 'world_sync') slimes = data.slimes;
@@ -159,10 +155,22 @@
                     if(s) s.hp -= data.dmg;
                 }
             });
+
+            conn.on('close', () => {
+                delete remotePlayers[conn.peer];
+                updatePlayerCount();
+            });
+        }
+
+        function updatePlayerCount() {
+            const count = Object.keys(peers).length + 1;
+            document.getElementById('player-count').innerText = `Jugadores: ${count}`;
         }
 
         function broadcast(msg) {
-            for(let id in peers) peers[id].send(msg);
+            for(let id in peers) {
+                if(peers[id].open) peers[id].send(msg);
+            }
         }
 
         function updateAppearance() {
@@ -171,27 +179,21 @@
             myData.acc = document.getElementById('live-acc').value;
         }
 
-        // --- INPUTS ---
         const keys = {};
         window.onkeydown = (e) => {
             keys[e.key.toLowerCase()] = true;
             if(e.key.toLowerCase() === 'i') {
                 const inv = document.getElementById('inventory');
                 inv.style.display = (inv.style.display === 'block') ? 'none' : 'block';
-                document.getElementById('st-lv').innerText = myData.lv;
-                document.getElementById('st-atk').innerText = myData.atk;
-                document.getElementById('st-hp').innerText = myData.maxHp;
+                document.getElementById('st-hp').innerText = `${Math.ceil(myData.hp)}/${myData.maxHp}`;
             }
         };
         window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
 
         window.onmousemove = (e) => {
             if(!gameActive) return;
-            // Calcular ángulo hacia el mouse desde el centro de la pantalla (donde está el jugador)
-            mousePos.x = e.clientX;
-            mousePos.y = e.clientY;
             myData.angle = Math.atan2(e.clientY - window.innerHeight/2, e.clientX - window.innerWidth/2);
-            myData.dir = (mousePos.x > window.innerWidth/2) ? 1 : -1;
+            myData.dir = (e.clientX > window.innerWidth/2) ? 1 : -1;
         };
 
         window.onmousedown = () => {
@@ -204,17 +206,15 @@
         function checkAttack() {
             slimes.forEach(s => {
                 let dist = Math.hypot(s.x - myData.x, s.y - myData.y);
-                // El ataque detecta si el slime está cerca del ángulo del mouse
                 let angleToSlime = Math.atan2(s.y - myData.y, s.x - myData.x);
                 let diff = Math.abs(myData.angle - angleToSlime);
-                if(dist < 70 && diff < 1.2 && s.hp > 0) {
+                if(dist < 75 && diff < 1.2 && s.hp > 0) {
                     if(isHost) s.hp -= myData.atk;
                     else broadcast({ type: 'slime_damage', id: s.id, dmg: myData.atk });
                 }
             });
         }
 
-        // --- LOOP PRINCIPAL ---
         function update() {
             if(!gameActive) return;
             let moving = false;
@@ -224,9 +224,7 @@
             if (keys['a']) { myData.x -= speed; moving = true; }
             if (keys['d']) { myData.x += speed; moving = true; }
 
-            if (myData.state !== 'attack') {
-                myData.state = moving ? 'walk' : 'idle';
-            }
+            if (myData.state !== 'attack') myData.state = moving ? 'walk' : 'idle';
 
             animTimer++;
             if(animTimer > 10) {
@@ -235,29 +233,48 @@
                 animTimer = 0;
             }
 
+            // IA SLIMES: SOLO EL HOST LOS MUEVE
             if(isHost) {
+                const allPlayers = [myData, ...Object.values(remotePlayers)];
                 slimes.forEach(s => {
                     if(s.hp <= 0) return;
-                    let dist = Math.hypot(myData.x - s.x, myData.y - s.y);
-                    if(dist < 150) {
-                        s.x += (myData.x - s.x) * 0.01;
-                        s.y += (myData.y - s.y) * 0.01;
-                        if(dist < 20 && Math.random() < 0.05) myData.hp -= 0.5;
+                    
+                    // Encontrar el jugador más cercano (Host o Clientes)
+                    let closestPlayer = null;
+                    let minDist = 200; // Radio de detección
+
+                    allPlayers.forEach(p => {
+                        let d = Math.hypot(p.x - s.x, p.y - s.y);
+                        if(d < minDist) {
+                            minDist = d;
+                            closestPlayer = p;
+                        }
+                    });
+
+                    if(closestPlayer) {
+                        s.x += (closestPlayer.x - s.x) * 0.015;
+                        s.y += (closestPlayer.y - s.y) * 0.015;
+                        if(minDist < 25 && Math.random() < 0.05) {
+                            if(closestPlayer.id === myData.id) myData.hp -= 0.5;
+                            // El host no baja la vida del cliente directamente aquí por simplicidad P2P, 
+                            // pero los slimes se verán pegados al cliente en su pantalla.
+                        }
                     }
                 });
                 broadcast({ type: 'world_sync', slimes: slimes });
             }
+            
             broadcast({ type: 'player_sync', data: myData });
             document.getElementById('hp-bar').style.width = (myData.hp/myData.maxHp)*100 + "%";
             document.getElementById('player-tag').innerText = `Nvl ${myData.lv} - ${myData.nick}`;
+            if(myData.hp <= 0) { myData.hp = 100; myData.x = 750; myData.y = 750; } // Respawn básico
         }
 
         function drawPlayer(p) {
             ctx.save();
             ctx.translate(p.x, p.y);
-            let bounce = (p.state === 'walk' || p.state === 'idle') ? Math.sin(p.frame) * 3 : 0;
+            let bounce = (p.state === 'walk') ? Math.sin(p.frame) * 4 : 0;
             
-            // Cuerpo
             ctx.save();
             ctx.scale(p.dir, 1);
             ctx.fillStyle = p.skin;
@@ -266,19 +283,16 @@
             ctx.fillRect(-15, -2 + bounce, 30, 5); 
             ctx.restore();
 
-            // Arma apuntando al mouse (p.angle)
             if(p.state === 'attack') {
                 ctx.save();
                 ctx.rotate(p.angle);
-                ctx.strokeStyle = "white"; ctx.lineWidth = 4;
-                ctx.beginPath();
-                ctx.arc(20, 0, 30, -0.8, 0.8);
-                ctx.stroke();
+                ctx.strokeStyle = "rgba(255,255,255,0.8)"; ctx.lineWidth = 4;
+                ctx.beginPath(); ctx.arc(20, 0, 35, -0.8, 0.8); ctx.stroke();
                 ctx.restore();
             }
 
             ctx.restore();
-            ctx.fillStyle = "white"; ctx.textAlign = "center";
+            ctx.fillStyle = "white"; ctx.textAlign = "center"; ctx.font = "bold 12px Arial";
             ctx.fillText(p.nick, p.x, p.y - 35);
         }
 
@@ -292,8 +306,8 @@
             ctx.save();
             ctx.translate(camX, camY);
 
-            // Suelo
-            ctx.strokeStyle = "rgba(255,255,255,0.05)";
+            // Rejilla de fondo
+            ctx.strokeStyle = "rgba(255,255,255,0.03)";
             for(let i=0; i<=WORLD_SIZE; i+=100) {
                 ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, WORLD_SIZE); ctx.stroke();
                 ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(WORLD_SIZE, i); ctx.stroke();
@@ -302,7 +316,8 @@
             slimes.forEach(s => {
                 if(s.hp <= 0) return;
                 ctx.fillStyle = "#44ff44";
-                ctx.beginPath(); ctx.ellipse(s.x, s.y + 10, 15 + Math.sin(s.frame)*2, 10, 0, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.ellipse(s.x, s.y + 10, 15, 10 + Math.sin(s.frame)*2, 0, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = "black"; ctx.fillRect(s.x-5, s.y+5, 2, 2); ctx.fillRect(s.x+3, s.y+5, 2, 2);
             });
 
             for(let id in remotePlayers) drawPlayer(remotePlayers[id]);

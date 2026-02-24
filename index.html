@@ -2,112 +2,150 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>RPG P2P Multiplayer</title>
+    <title>RPG P2P - Mundo Extenso</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #222; color: white; }
-        canvas { background: #444; border: 4px solid #555; display: block; margin: 0 auto; }
-        .ui { margin: 20px; padding: 10px; background: #333; border-radius: 8px; }
-        input { padding: 8px; }
+        body { font-family: sans-serif; text-align: center; background: #1a1a1a; color: white; margin: 0; overflow: hidden; }
+        canvas { background: #2d5a27; border: 4px solid #333; display: block; margin: 0 auto; cursor: crosshair; }
+        .ui { position: absolute; top: 10px; left: 10px; z-index: 10; padding: 15px; background: rgba(0,0,0,0.7); border-radius: 8px; pointer-events: auto; }
+        input, select, button { margin: 5px; padding: 5px; border-radius: 4px; border: none; }
     </style>
 </head>
 <body>
 
     <div class="ui">
-        <h3>Tu ID: <span id="my-id">...</span></h3>
-        <input type="text" id="target-id" placeholder="ID del amigo para unirse">
-        <button onclick="connectToPeer()">Conectar y Jugar</button>
-        <div style="margin-top:10px;">
-            Nick: <input type="text" id="nick" value="Guerrero">
-            Skin: <select id="skin"><option value="gold">Dorado</option><option value="cyan">Cian</option></select>
-        </div>
+        <strong>Tu ID:</strong> <span id="my-id">...</span><br>
+        <input type="text" id="target-id" placeholder="ID del amigo">
+        <button onclick="connectToPeer()">Conectar</button><br>
+        Nick: <input type="text" id="nick" value="Guerrero" maxlength="10">
+        Skin: <select id="skin"><option value="#ffd700">Dorado</option><option value="#00ffff">Cian</option><option value="#ff69b4">Rosa</option></select>
     </div>
 
-    <canvas id="game" width="600" height="400"></canvas>
+    <canvas id="game"></canvas>
 
     <script>
         const canvas = document.getElementById('game');
         const ctx = canvas.getContext('2d');
-        const peer = new Peer(); // Crea un ID aleatorio automáticamente
+        const peer = new Peer();
 
-        let myData = { x: 100, y: 100, nick: "Jugador", skin: "gold", level: 1 };
-        let peers = {}; // Aquí guardaremos las conexiones con otros
-        let remotePlayers = {}; // Datos de los otros jugadores
+        // Configuración del Mundo
+        const WORLD_SIZE = 2000;
+        let myData = { x: 1000, y: 1000, nick: "Jugador", skin: "#ffd700", level: 1 };
+        let peers = {};
+        let remotePlayers = {};
+        let trees = [];
 
-        // 1. Mostrar mi ID al iniciar
-        peer.on('open', (id) => {
-            document.getElementById('my-id').innerText = id;
-        });
+        // Ajustar canvas a la ventana
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.onresize = resize;
+        resize();
 
-        // 2. Escuchar cuando alguien se conecta a MÍ
-        peer.on('connection', (conn) => {
-            setupConnection(conn);
-        });
+        // Generar árboles (Semilla fija para que todos vean los mismos si quisieras, 
+        // pero aquí generamos 100 al azar al iniciar)
+        function generateTrees() {
+            for(let i=0; i<100; i++) {
+                trees.push({
+                    x: Math.random() * WORLD_SIZE,
+                    y: Math.random() * WORLD_SIZE,
+                    size: 20 + Math.random() * 20
+                });
+            }
+        }
+        generateTrees();
+
+        peer.on('open', (id) => document.getElementById('my-id').innerText = id);
+        peer.on('connection', setupConnection);
 
         function connectToPeer() {
-            const targetId = document.getElementById('target-id').value;
-            const conn = peer.connect(targetId);
+            const conn = peer.connect(document.getElementById('target-id').value);
             setupConnection(conn);
         }
 
         function setupConnection(conn) {
             conn.on('open', () => {
                 peers[conn.peer] = conn;
-                // Enviar mis datos iniciales
                 conn.send({ type: 'init', data: myData });
-
                 conn.on('data', (data) => {
-                    if (data.type === 'move' || data.type === 'init') {
-                        remotePlayers[conn.peer] = data.data;
-                    }
+                    if (data.type === 'move' || data.type === 'init') remotePlayers[conn.peer] = data.data;
                 });
             });
         }
 
-        // 3. Lógica de Movimiento
         const keys = {};
-        window.onkeydown = (e) => keys[e.key] = true;
-        window.onkeyup = (e) => keys[e.key] = false;
+        window.onkeydown = (e) => keys[e.key.toLowerCase()] = true;
+        window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
 
         function update() {
             let moved = false;
             myData.nick = document.getElementById('nick').value;
             myData.skin = document.getElementById('skin').value;
 
-            if (keys['ArrowUp'] || keys['w']) { myData.y -= 3; moved = true; }
-            if (keys['ArrowDown'] || keys['s']) { myData.y += 3; moved = true; }
-            if (keys['ArrowLeft'] || keys['a']) { myData.x -= 3; moved = true; }
-            if (keys['ArrowRight'] || keys['d']) { myData.x += 3; moved = true; }
+            const speed = 5;
+            if (keys['w'] || keys['arrowup']) { myData.y -= speed; moved = true; }
+            if (keys['s'] || keys['arrowdown']) { myData.y += speed; moved = true; }
+            if (keys['a'] || keys['arrowleft']) { myData.x -= speed; moved = true; }
+            if (keys['d'] || keys['arrowright']) { myData.x += speed; moved = true; }
+
+            // Limitar al mundo
+            myData.x = Math.max(0, Math.min(WORLD_SIZE, myData.x));
+            myData.y = Math.max(0, Math.min(WORLD_SIZE, myData.y));
 
             if (moved) {
-                // Notificar a todos los peers conectados
-                for (let id in peers) {
-                    peers[id].send({ type: 'move', data: myData });
-                }
+                for (let id in peers) peers[id].send({ type: 'move', data: myData });
             }
         }
 
-        // 4. Renderizado
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // --- Lógica de la Cámara ---
+            // Centramos la cámara en nuestro personaje
+            const camX = canvas.width / 2 - myData.x;
+            const camY = canvas.height / 2 - myData.y;
+
+            ctx.save();
+            ctx.translate(camX, camY);
+
+            // Dibujar límites del mundo
+            ctx.strokeStyle = "rgba(255,255,255,0.2)";
+            ctx.strokeRect(0, 0, WORLD_SIZE, WORLD_SIZE);
+
+            // Dibujar Arbolitos
+            trees.forEach(tree => {
+                // Tronco
+                ctx.fillStyle = "#5d4037";
+                ctx.fillRect(tree.x - 5, tree.y, 10, 15);
+                // Hojas
+                ctx.fillStyle = "#2e7d32";
+                ctx.beginPath();
+                ctx.arc(tree.x, tree.y, tree.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Dibujar a los demás
+            for (let id in remotePlayers) drawPlayer(remotePlayers[id]);
 
             // Dibujarme a mí
             drawPlayer(myData);
 
-            // Dibujar a los demás
-            for (let id in remotePlayers) {
-                drawPlayer(remotePlayers[id]);
-            }
+            ctx.restore();
 
             update();
             requestAnimationFrame(draw);
         }
 
         function drawPlayer(p) {
+            // Cuerpo
             ctx.fillStyle = p.skin;
-            ctx.fillRect(p.x, p.y, 30, 30);
+            ctx.fillRect(p.x - 15, p.y - 15, 30, 30);
+            // Nickname
             ctx.fillStyle = "white";
-            ctx.fillText(`${p.nick} (Lvl ${p.level})`, p.x - 10, p.y - 10);
+            ctx.font = "12px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(`${p.nick} (Lvl ${p.level})`, p.x, p.y - 25);
         }
 
         draw();

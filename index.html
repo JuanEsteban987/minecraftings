@@ -95,7 +95,20 @@
             background: rgba(0,0,0,0.8);
             padding: 15px;
             border: 2px solid var(--border-color);
-            pointer-events: none;
+            pointer-events: auto; /* Cambiado a auto para poder clickear el ID */
+        }
+
+        #display-id {
+            color: #00ff00;
+            font-family: monospace;
+            font-weight: bold;
+            cursor: copy; /* Cursor de copiar */
+            padding: 4px;
+            border-radius: 4px;
+            transition: background 0.3s;
+        }
+        #display-id:hover {
+            background: rgba(255, 255, 255, 0.1);
         }
 
         #hotbar {
@@ -181,8 +194,8 @@
     </div>
 
     <div id="game-ui">
-        <div style="font-size: 0.7rem; color: #aaa;">ID DE TU SESIÓN:</div>
-        <div id="display-id" style="color: #00ff00; font-family: monospace; font-weight: bold;">Generando...</div>
+        <div style="font-size: 0.7rem; color: #aaa;">ID DE SESIÓN (Click para copiar):</div>
+        <div id="display-id" onclick="copyIdToClipboard()">Generando...</div>
     </div>
     
     <div id="hotbar">

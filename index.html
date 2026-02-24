@@ -2,33 +2,36 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Multiplayer RPG: Reinos por Código</title>
+    <title>RPG Multi-Reinos</title>
     <style>
-        :root { --gold: #f1c40f; --green: #2ecc71; --dark: #1e272e; }
+        :root { --gold: #f1c40f; --green: #2ecc71; --blue: #3498db; --dark: #1e272e; }
         body { margin: 0; background: var(--dark); overflow: hidden; font-family: 'Segoe UI', sans-serif; color: white; }
         
-        /* MENÚ DE SERVIDORES */
         #menu-container {
             position: absolute; width: 100%; height: 100%;
             display: flex; align-items: center; justify-content: center;
             background: radial-gradient(circle, #2c3e50, #000); z-index: 100;
         }
         .panel {
-            background: rgba(44, 62, 80, 0.9); padding: 40px; border-radius: 20px;
+            background: rgba(44, 62, 80, 0.95); padding: 40px; border-radius: 20px;
             border: 3px solid var(--gold); text-align: center; backdrop-filter: blur(10px);
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
         }
         input { 
-            padding: 12px; width: 250px; border-radius: 8px; border: none; 
-            margin: 8px 0; font-size: 16px; text-align: center;
+            padding: 12px; width: 280px; border-radius: 8px; border: none; 
+            margin: 10px 0; font-size: 16px; text-align: center; outline: none;
         }
+        .btn-group { display: flex; gap: 10px; justify-content: center; margin-top: 15px; }
         button {
-            padding: 12px 30px; background: var(--green); color: white; border: none;
-            border-radius: 8px; cursor: pointer; font-weight: bold; margin-top: 15px;
-            box-shadow: 0 4px 0 #27ae60;
+            padding: 12px 20px; color: white; border: none;
+            border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px;
+            transition: 0.2s;
         }
-        button:active { transform: translateY(3px); box-shadow: none; }
+        .btn-create { background: var(--blue); box-shadow: 0 4px 0 #2980b9; }
+        .btn-join { background: var(--green); box-shadow: 0 4px 0 #27ae60; }
+        button:hover { transform: translateY(-2px); filter: brightness(1.1); }
+        button:active { transform: translateY(2px); box-shadow: none; }
 
-        /* HUD JUEGO */
         #game-ui {
             display: none; position: absolute; top: 15px; left: 15px;
             background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px;
@@ -41,19 +44,22 @@
 
     <div id="menu-container">
         <div class="panel">
-            <h1 style="color: var(--gold); margin-top:0;">👑 REINO MULTIJUGADOR</h1>
-            <input type="text" id="username" placeholder="Tu Nombre">
+            <h1 style="color: var(--gold); margin: 0 0 20px 0;">👑 REINO RPG ONLINE</h1>
+            <input type="text" id="username" placeholder="Tu Nombre de Héroe">
             <br>
-            <input type="text" id="server-code" placeholder="Código del Reino (Ej: 1234)">
-            <br>
-            <button onclick="conectar()">ENTRAR AL REINO</button>
+            <input type="text" id="server-code" placeholder="Código para Unirse">
+            
+            <div class="btn-group">
+                <button class="btn-create" onclick="crearReino()">✨ CREAR NUEVO REINO</button>
+                <button class="btn-join" onclick="unirse()">⚔️ UNIRSE A REINO</button>
+            </div>
+            <p style="font-size: 11px; color: #bdc3c7; margin-top: 20px;">Crea un reino y comparte el código con amigos</p>
         </div>
     </div>
 
     <div id="game-ui">
-        <div>REINO: <b id="ui-reino" style="color:var(--gold)"></b></div>
+        <div>REINO COD: <b id="ui-reino" style="color:var(--gold)"></b></div>
         <div>HÉROE: <b id="ui-name" style="color:var(--green)"></b></div>
-        <div style="font-size: 11px; margin-top:5px; opacity:0.7">WASD: Mover | CLICK: Atacar</div>
     </div>
 
     <canvas id="gameCanvas"></canvas>
@@ -66,12 +72,19 @@
         const TILE = 40;
 
         let myId, gameActive = false;
-        let players = {}, world = {}, enemies = [];
+        let players = {}, world = {};
 
-        function conectar() {
+        // Función para generar código aleatorio
+        function crearReino() {
+            const randomCode = Math.random().toString(36).substring(2, 7).toUpperCase();
+            document.getElementById("server-code").value = randomCode;
+            unirse();
+        }
+
+        function unirse() {
             const nombre = document.getElementById("username").value;
             const codigo = document.getElementById("server-code").value;
-            if(!nombre || !codigo) return alert("Faltan datos");
+            if(!nombre || !codigo) return alert("Escribe tu nombre y un código.");
 
             socket.emit('unirseReino', { codigo, nombre });
             
@@ -86,7 +99,7 @@
             run();
         }
 
-        // --- SOCKETS ---
+        // --- MANEJO DE RED ---
         socket.on('init', (data) => { myId = data.id; players = data.jugadores; world = data.mundo; });
         socket.on('nuevoJugador', (data) => players[data.id] = data.info);
         socket.on('jugadorMovido', (data) => { if(players[data.id]) { players[data.id].x = data.x; players[data.id].y = data.y; }});
@@ -99,7 +112,7 @@
         socket.on('worldUpdate', (data) => { if(data.type) world[data.key] = data.type; else delete world[data.key]; });
         socket.on('jugadorSeFue', (id) => delete players[id]);
 
-        // --- CONTROLES ---
+        // --- CONTROLES Y RENDER ---
         window.addEventListener('keydown', (e) => {
             if(!gameActive || !players[myId]) return;
             let nx = players[myId].x, ny = players[myId].y;
@@ -117,30 +130,27 @@
             if(!gameActive) return;
             socket.emit('attack');
             const gx = Math.floor(e.clientX / TILE), gy = Math.floor(e.clientY / TILE);
-            const key = `${gx},${gy}`;
-            socket.emit('blockUpdate', { key, type: world[key] ? null : "#7f8c8d" });
+            socket.emit('blockUpdate', { key: `${gx},${gy}`, type: world[`${gx},${gy}`] ? null : "#7f8c8d" });
         });
 
         function run() {
             if(!gameActive) return;
             ctx.fillStyle = "#4a7023"; ctx.fillRect(0,0, canvas.width, canvas.height);
 
-            // Bloques
             for(let k in world) {
                 const [x, y] = k.split(',').map(Number);
                 ctx.fillStyle = world[k]; ctx.fillRect(x*TILE, y*TILE, TILE, TILE);
                 ctx.strokeStyle = "rgba(0,0,0,0.2)"; ctx.strokeRect(x*TILE, y*TILE, TILE, TILE);
             }
 
-            // Jugadores
             for(let id in players) {
                 const p = players[id];
                 ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, TILE, TILE);
-                ctx.fillStyle = "white"; ctx.textAlign = "center";
+                ctx.fillStyle = "white"; ctx.font = "bold 12px Arial"; ctx.textAlign = "center";
                 ctx.fillText(p.nombre, p.x + TILE/2, p.y - 10);
 
                 if(p.attacking) {
-                    ctx.fillStyle = "#f1c40f"; ctx.fillRect(p.x + TILE, p.y + 15, 25, 8);
+                    ctx.fillStyle = "#f1c40f"; ctx.fillRect(p.x + TILE, p.y + 15, 25, 8); // Espada
                 }
             }
             requestAnimationFrame(run);

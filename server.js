@@ -11,29 +11,20 @@ let reinos = {};
 
 io.on('connection', (socket) => {
     socket.on('unirseReino', (data) => {
-        const { codigo, nombre } = data;
-        const roomCode = codigo.toUpperCase();
-        socket.join(roomCode);
+        const codigo = (data.codigo || "LOCAL").toUpperCase();
+        socket.join(codigo);
+        if (!reinos[codigo]) reinos[codigo] = { jugadores: {}, mundo: {} };
 
-        if (!reinos[roomCode]) {
-            reinos[roomCode] = { jugadores: {}, mundo: {} };
-        }
-
-        reinos[roomCode].jugadores[socket.id] = {
+        reinos[codigo].jugadores[socket.id] = {
             x: 120, y: 120,
-            nombre: nombre,
+            nombre: data.nombre || "Invitado",
             color: `hsl(${Math.random() * 360}, 70%, 50%)`,
             attacking: false
         };
 
-        socket.emit('init', { 
-            id: socket.id, 
-            jugadores: reinos[roomCode].jugadores, 
-            mundo: reinos[roomCode].mundo 
-        });
-
-        socket.to(roomCode).emit('nuevoJugador', { id: socket.id, info: reinos[roomCode].jugadores[socket.id] });
-        socket.codigoReino = roomCode;
+        socket.emit('init', { id: socket.id, jugadores: reinos[codigo].jugadores, mundo: reinos[codigo].mundo });
+        socket.to(codigo).emit('nuevoJugador', { id: socket.id, info: reinos[codigo].jugadores[socket.id] });
+        socket.codigoReino = codigo;
     });
 
     socket.on('move', (data) => {
@@ -45,15 +36,12 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('attack', () => {
-        io.to(socket.codigoReino).emit('jugadorAtacando', { id: socket.id });
-    });
+    socket.on('attack', () => io.to(socket.codigoReino).emit('jugadorAtacando', { id: socket.id }));
 
     socket.on('blockUpdate', (data) => {
         const r = reinos[socket.codigoReino];
         if (r) {
-            if (data.type) r.mundo[data.key] = data.type;
-            else delete r.mundo[data.key];
+            data.type ? r.mundo[data.key] = data.type : delete r.mundo[data.key];
             io.to(socket.codigoReino).emit('worldUpdate', data);
         }
     });
@@ -67,4 +55,4 @@ io.on('connection', (socket) => {
     });
 });
 
-server.listen(3000, () => console.log('Servidor en http://localhost:3000'));
+server.listen(3000, () => console.log('Servidor listo en http://localhost:3000'));

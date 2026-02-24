@@ -1,58 +1,4 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nebula RPG Multiplayer P2P</title>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <style>
-        :root {
-            --primary: #ffd700;
-            --danger: #ff4444;
-            --bg-dark: rgba(20, 20, 20, 0.95);
-            --border: 3px solid #5d4037;
-        }
 
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; overflow: hidden; background: #000; color: #eee; }
-        canvas { display: none; background: #1b3a1a; cursor: crosshair; }
-
-        /* --- INTERFAZ DE MENÚ --- */
-        #main-menu {
-            position: fixed; width: 100%; height: 100%; z-index: 1000;
-            display: flex; justify-content: center; align-items: center;
-            background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('https://www.transparenttextures.com/patterns/dark-matter.png');
-        }
-        .window {
-            background: var(--bg-dark); padding: 40px; border: var(--border);
-            border-radius: 10px; box-shadow: 0 0 50px rgba(0,0,0,0.8); text-align: center; width: 350px;
-        }
-        h1 { color: var(--primary); text-shadow: 2px 2px #000; margin-bottom: 30px; }
-        input, select, button { 
-            width: 100%; padding: 12px; margin: 10px 0; border-radius: 5px; 
-            border: 1px solid #444; background: #111; color: white; box-sizing: border-box;
-        }
-        button { 
-            background: #8b4513; color: white; font-weight: bold; border: none; 
-            cursor: pointer; transition: 0.3s; 
-        }
-        button:hover { background: var(--primary); color: #000; }
-
-        /* --- INTERFAZ IN-GAME --- */
-        .hud-panel { position: fixed; z-index: 100; pointer-events: none; }
-        .interactive { pointer-events: auto; }
-        
-        #top-left { top: 20px; left: 20px; }
-        #top-right { top: 20px; right: 20px; }
-        #bottom-center { bottom: 20px; left: 50%; transform: translateX(-50%); }
-
-        .glass { background: rgba(0,0,0,0.7); border: 2px solid #555; padding: 15px; border-radius: 8px; }
-        
-        /* Stats & Oro */
-        .stat-badge { font-weight: bold; color: var(--primary); font-size: 1.2em; display: block; margin-bottom: 5px; }
-        .player-tag { background: rgba(0,255,0,0.2); padding: 4px 8px; border-radius: 4px; font-size: 0.8em; margin: 2px 0; display: block; }
-
-        /* Barras */
-        .bar-container { width: 250px; height: 15px; background: #333; border: 1px solid #000; margin: 5px 0; position: relative; }
         .bar-fill { height: 100%; transition: width 0.3s ease; }
         #hp-fill { background: var(--danger); }
         #xp-fill { background: #0088ff; }
@@ -403,3 +349,4 @@
     </script>
 </body>
 </html>
+

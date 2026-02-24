@@ -2,275 +2,403 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>RPG P2P: Tienda, PvP & Barras de Vida</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nebula RPG Multiplayer P2P</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { font-family: 'Courier New', monospace; margin: 0; overflow: hidden; background: #1a1a1a; color: white; }
-        canvas { background: #2d5a27; display: none; }
-        
-        /* UI Estilo Retro */
-        #main-menu {
-            position: absolute; width: 100%; height: 100%; background: radial-gradient(#2d5a27, #1a1a1a);
-            display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100;
+        :root {
+            --primary: #ffd700;
+            --danger: #ff4444;
+            --bg-dark: rgba(20, 20, 20, 0.95);
+            --border: 3px solid #5d4037;
         }
-        .menu-box { background: rgba(0,0,0,0.9); padding: 30px; border: 4px solid #8b4513; border-radius: 15px; text-align: center; }
-        input, button { margin: 10px; padding: 12px; font-size: 16px; border-radius: 5px; border: none; }
-        button { cursor: pointer; background: #ffd700; font-weight: bold; }
 
-        /* Paneles de Juego */
-        .ui-left { position: absolute; top: 10px; left: 10px; z-index: 10; padding: 10px; background: rgba(0,0,0,0.8); border: 2px solid #555; display: none; min-width: 150px; }
-        .ui-right { position: absolute; top: 10px; right: 10px; z-index: 10; padding: 15px; background: rgba(40, 40, 40, 0.9); border: 3px solid #8b4513; display: none; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; overflow: hidden; background: #000; color: #eee; }
+        canvas { display: none; background: #1b3a1a; cursor: crosshair; }
+
+        /* --- INTERFAZ DE MENÚ --- */
+        #main-menu {
+            position: fixed; width: 100%; height: 100%; z-index: 1000;
+            display: flex; justify-content: center; align-items: center;
+            background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('https://www.transparenttextures.com/patterns/dark-matter.png');
+        }
+        .window {
+            background: var(--bg-dark); padding: 40px; border: var(--border);
+            border-radius: 10px; box-shadow: 0 0 50px rgba(0,0,0,0.8); text-align: center; width: 350px;
+        }
+        h1 { color: var(--primary); text-shadow: 2px 2px #000; margin-bottom: 30px; }
+        input, select, button { 
+            width: 100%; padding: 12px; margin: 10px 0; border-radius: 5px; 
+            border: 1px solid #444; background: #111; color: white; box-sizing: border-box;
+        }
+        button { 
+            background: #8b4513; color: white; font-weight: bold; border: none; 
+            cursor: pointer; transition: 0.3s; 
+        }
+        button:hover { background: var(--primary); color: #000; }
+
+        /* --- INTERFAZ IN-GAME --- */
+        .hud-panel { position: fixed; z-index: 100; pointer-events: none; }
+        .interactive { pointer-events: auto; }
         
-        #hud { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); text-align: center; pointer-events: none; display: none; }
-        #inventory { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 250px; background: #333; border: 4px solid #8b4513; padding: 20px; display: none; z-index: 20; }
+        #top-left { top: 20px; left: 20px; }
+        #top-right { top: 20px; right: 20px; }
+        #bottom-center { bottom: 20px; left: 50%; transform: translateX(-50%); }
+
+        .glass { background: rgba(0,0,0,0.7); border: 2px solid #555; padding: 15px; border-radius: 8px; }
         
-        .player-list-item { color: #0f0; font-size: 12px; margin: 2px 0; }
-        .gold-count { color: #ffd700; font-weight: bold; font-size: 18px; }
+        /* Stats & Oro */
+        .stat-badge { font-weight: bold; color: var(--primary); font-size: 1.2em; display: block; margin-bottom: 5px; }
+        .player-tag { background: rgba(0,255,0,0.2); padding: 4px 8px; border-radius: 4px; font-size: 0.8em; margin: 2px 0; display: block; }
+
+        /* Barras */
+        .bar-container { width: 250px; height: 15px; background: #333; border: 1px solid #000; margin: 5px 0; position: relative; }
+        .bar-fill { height: 100%; transition: width 0.3s ease; }
+        #hp-fill { background: var(--danger); }
+        #xp-fill { background: #0088ff; }
+
+        /* Inventario Emergente */
+        #inv-modal {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            display: none; width: 300px; z-index: 200;
+        }
     </style>
 </head>
 <body>
 
     <div id="main-menu">
-        <div class="menu-box">
-            <h1 style="color: #ffd700;">WORLD P2P RPG</h1>
-            <input type="text" id="init-nick" placeholder="Tu Nombre" maxlength="10">
-            <div>
-                Ropa: <input type="color" id="init-skin" value="#ffd700">
-                Acc: <input type="color" id="init-acc" value="#ff0000">
+        <div class="window">
+            <h1>NEBULA RPG</h1>
+            <input type="text" id="in-nick" placeholder="Nickname..." maxlength="12">
+            <div style="display: flex; gap: 10px;">
+                <div style="flex:1">Ropa: <input type="color" id="in-skin" value="#ffd700"></div>
+                <div style="flex:1">Acc: <input type="color" id="in-acc" value="#ff4444"></div>
             </div>
-            <button onclick="startGame(true)">CREAR SALA</button><br>
-            <input type="text" id="join-id" placeholder="ID del Host">
-            <button onclick="startGame(false)">UNIRSE</button>
+            <button onclick="init(true)">CREAR MUNDO</button>
+            <div style="margin: 15px 0; color: #666;">— o —</div>
+            <input type="text" id="join-id" placeholder="Pegar ID del Host">
+            <button onclick="init(false)" style="background: #2e7d32;">UNIRSE A MUNDO</button>
         </div>
     </div>
 
-    <div class="ui-left" id="panel-left">
-        <strong>ID:</strong> <span id="my-id" style="color:#0f0">...</span><br>
-        <div id="player-count" style="margin: 5px 0;">Jugadores: 1</div>
-        <div id="player-names"></div>
-        <hr>
-        <div class="gold-count">ORO: $<span id="gold-val">0</span></div>
+    <div id="top-left" class="hud-panel glass">
+        <span style="font-size: 0.7em; color: #888;">ID DE SALA:</span>
+        <div id="my-id-display" style="color: #0f0; font-size: 0.9em; margin-bottom: 10px;">Cargando...</div>
+        <div id="player-list"></div>
     </div>
 
-    <div class="ui-right" id="panel-right">
-        <input type="text" id="live-nick" oninput="updateAppearance()" style="width:100%">
-        <input type="color" id="live-skin" onchange="updateAppearance()">
-        <input type="color" id="live-acc" onchange="updateAppearance()">
-    </div>
-
-    <div id="hud">
-        <div id="player-tag">Nvl 1</div>
-        <div style="width: 200px; height: 10px; background: #444; border: 1px solid #000;">
-            <div id="hp-bar" style="background: #ff3333; height: 100%; width: 100%;"></div>
+    <div id="top-right" class="hud-panel glass interactive">
+        <span class="stat-badge">💰 $<span id="gold-ui">0</span></span>
+        <div style="border-top: 1px solid #444; padding-top: 10px;">
+            <input type="text" id="live-nick" oninput="syncAppearance()" style="padding: 5px; font-size: 0.8em;">
+            <div style="display:flex; gap:5px;">
+                <input type="color" id="live-skin" onchange="syncAppearance()">
+                <input type="color" id="live-acc" onchange="syncAppearance()">
+            </div>
         </div>
-        <small>Presiona [I] Stats | Tienda en el centro del mapa</small>
     </div>
 
-    <div id="inventory">
-        <h2 style="text-align:center; color: gold;">STATS</h2>
-        <p>Ataque: <span id="st-atk">10</span></p>
-        <p>Experiencia: <span id="st-xp">0</span></p>
-        <button onclick="document.getElementById('inventory').style.display='none'">Cerrar</button>
+    <div id="bottom-center" class="hud-panel">
+        <div id="level-tag" style="margin-bottom: 5px; font-weight: bold;">NIVEL 1</div>
+        <div class="bar-container"><div id="hp-fill" class="bar-fill" style="width: 100%;"></div></div>
+        <div class="bar-container" style="height: 5px;"><div id="xp-fill" class="bar-fill" style="width: 0%;"></div></div>
+        <div style="font-size: 0.7em; color: #aaa; margin-top: 5px;">[WASD] Mover | [CLICK] Atacar | [I] Inventario</div>
     </div>
 
-    <canvas id="game"></canvas>
+    <div id="inv-modal" class="window glass interactive">
+        <h2 style="color: var(--primary); margin: 0;">ESTADÍSTICAS</h2>
+        <div style="text-align: left; margin: 20px 0;">
+            <p>⚔️ Daño: <span id="stat-atk">10</span></p>
+            <p>🛡️ Defensa: <span id="stat-def">5</span></p>
+            <p>📈 XP: <span id="stat-xp">0/100</span></p>
+        </div>
+        <button onclick="toggleInventory()">CERRAR</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
 
     <script>
-        const canvas = document.getElementById('game');
+        const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const peer = new Peer();
 
+        // --- ESTADO DEL JUEGO ---
         const WORLD_SIZE = 3000;
-        let isHost = true;
-        let gameActive = false;
+        let isHost = false;
+        let gameRunning = false;
         let gold = 0;
+        let animFrame = 0;
 
-        let myData = { 
-            id: '', x: 1500, y: 1500, nick: "Heroe", skin: "#ffd700", acc: "#ff0000",
-            lv: 1, xp: 0, hp: 100, maxHp: 100, atk: 10, state: 'idle', frame: 0, dir: 1, angle: 0
+        let myData = {
+            id: '', x: 1500, y: 1500, nick: 'Héroe', skin: '#ffd700', acc: '#ff4444',
+            hp: 100, maxHp: 100, lv: 1, xp: 0, atk: 15, angle: 0, state: 'idle', dir: 1
         };
-        
-        let peers = {};
+
         let remotePlayers = {};
         let slimes = [];
-        let animTimer = 0;
+        let peers = {};
 
-        // Tienda
-        const shop = { x: 1400, y: 1400, w: 200, h: 200 };
+        // Zona Tienda
+        const shopPos = { x: 1450, y: 1450, size: 200 };
 
-        function startGame(host) {
-            isHost = host;
-            myData.nick = document.getElementById('init-nick').value || "Heroe";
-            myData.skin = document.getElementById('init-skin').value;
-            myData.acc = document.getElementById('init-acc').value;
+        // --- INICIALIZACIÓN ---
+        function init(hostMode) {
+            isHost = hostMode;
+            myData.nick = document.getElementById('in-nick').value || "Explorador";
+            myData.skin = document.getElementById('in-skin').value;
+            myData.acc = document.getElementById('in-acc').value;
             
+            document.getElementById('live-nick').value = myData.nick;
+            document.getElementById('live-skin').value = myData.skin;
+            document.getElementById('live-acc').value = myData.acc;
+
             if(!isHost) {
-                const tid = document.getElementById('join-id').value;
-                if(!tid) return alert("Falta ID");
-                setupConnection(peer.connect(tid));
+                const targetId = document.getElementById('join-id').value;
+                if(!targetId) return alert("Introduce el ID del Host");
+                connectToPeer(targetId);
             }
-            
-            gameActive = true;
+
+            gameRunning = true;
             document.getElementById('main-menu').style.display = 'none';
-            document.getElementById('game').style.display = 'block';
-            document.querySelectorAll('.ui-left, .ui-right, #hud').forEach(e => e.style.display = 'block');
-            
+            canvas.style.display = 'block';
             if(isHost) spawnSlimes();
-            render();
+            loop();
         }
 
-        function spawnSlimes() {
-            for(let i=0; i<30; i++) {
-                slimes.push({ id: i, x: Math.random()*WORLD_SIZE, y: Math.random()*WORLD_SIZE, hp: 50, maxHp: 50, frame: 0 });
-            }
+        // --- CONEXIÓN P2P ---
+        peer.on('open', (id) => {
+            myData.id = id;
+            document.getElementById('my-id-display').innerText = id;
+        });
+
+        peer.on('connection', (conn) => {
+            setupConn(conn);
+        });
+
+        function connectToPeer(id) {
+            setupConn(peer.connect(id));
         }
 
-        peer.on('open', (id) => { myData.id = id; document.getElementById('my-id').innerText = id; });
-        peer.on('connection', setupConnection);
-
-        function setupConnection(conn) {
+        function setupConn(conn) {
             peers[conn.peer] = conn;
             conn.on('data', (data) => {
-                if (data.type === 'player_sync') remotePlayers[data.data.id] = data.data;
-                if (data.type === 'world_sync') slimes = data.slimes;
-                if (data.type === 'damage' && data.targetId === myData.id) myData.hp -= data.dmg;
-                if (data.type === 'slime_damage' && isHost) {
-                    let s = slimes.find(s => s.id === data.id);
+                if(data.type === 'sync') remotePlayers[data.player.id] = data.player;
+                if(data.type === 'world') slimes = data.slimes;
+                if(data.type === 'hit') {
+                    if(data.target === myData.id) {
+                        myData.hp -= data.dmg;
+                        if(myData.hp <= 0) respawn();
+                    }
+                }
+                if(data.type === 'slime_hit' && isHost) {
+                    let s = slimes.find(s => s.id === data.sId);
                     if(s) s.hp -= data.dmg;
                 }
             });
-            conn.on('open', updateUI);
-            conn.on('close', () => { delete remotePlayers[conn.peer]; updateUI(); });
-        }
-
-        function updateUI() {
-            const count = Object.keys(remotePlayers).length + 1;
-            document.getElementById('player-count').innerText = `Jugadores: ${count}`;
-            let namesHTML = `<div class="player-list-item">● ${myData.nick} (Tú)</div>`;
-            for(let id in remotePlayers) namesHTML += `<div class="player-list-item">● ${remotePlayers[id].nick}</div>`;
-            document.getElementById('player-names').innerHTML = namesHTML;
+            conn.on('open', () => refreshPlayerList());
+            conn.on('close', () => { delete remotePlayers[conn.peer]; refreshPlayerList(); });
         }
 
         function broadcast(msg) {
             for(let id in peers) if(peers[id].open) peers[id].send(msg);
         }
 
-        function updateAppearance() {
-            myData.nick = document.getElementById('live-nick').value;
-            myData.skin = document.getElementById('live-skin').value;
-            myData.acc = document.getElementById('live-acc').value;
-            updateUI();
+        // --- LÓGICA DE JUEGO ---
+        function spawnSlimes() {
+            for(let i=0; i<25; i++) {
+                slimes.push({ id: i, x: Math.random()*WORLD_SIZE, y: Math.random()*WORLD_SIZE, hp: 60, maxHp: 60 });
+            }
         }
 
-        // INPUTS
         const keys = {};
         window.onkeydown = (e) => {
             keys[e.key.toLowerCase()] = true;
-            if(e.key.toLowerCase() === 'i') document.getElementById('inventory').style.display = 'block';
+            if(e.key.toLowerCase() === 'i') toggleInventory();
         };
         window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
+
+        function toggleInventory() {
+            const modal = document.getElementById('inv-modal');
+            modal.style.display = (modal.style.display === 'block') ? 'none' : 'block';
+            document.getElementById('stat-atk').innerText = myData.atk;
+            document.getElementById('stat-xp').innerText = `${myData.xp}/100`;
+        }
+
+        function syncAppearance() {
+            myData.nick = document.getElementById('live-nick').value;
+            myData.skin = document.getElementById('live-skin').value;
+            myData.acc = document.getElementById('live-acc').value;
+            refreshPlayerList();
+        }
+
+        function refreshPlayerList() {
+            let html = `<div class="player-tag" style="color:var(--primary)">★ ${myData.nick}</div>`;
+            for(let id in remotePlayers) html += `<div class="player-tag">● ${remotePlayers[id].nick}</div>`;
+            document.getElementById('player-list').innerHTML = html;
+        }
+
+        window.onmousedown = (e) => {
+            if(!gameRunning) return;
+            myData.state = 'attack';
+            processAttack();
+            setTimeout(() => myData.state = 'idle', 150);
+        };
+
         window.onmousemove = (e) => {
+            if(!gameRunning) return;
             myData.angle = Math.atan2(e.clientY - window.innerHeight/2, e.clientX - window.innerWidth/2);
             myData.dir = (e.clientX > window.innerWidth/2) ? 1 : -1;
         };
-        window.onmousedown = () => {
-            myData.state = 'attack';
-            doAttack();
-            setTimeout(() => myData.state = 'idle', 200);
-        };
 
-        function doAttack() {
-            // Ataque a Slimes
+        function processAttack() {
+            // Atacar Slimes
             slimes.forEach(s => {
                 if(s.hp <= 0) return;
-                let d = Math.hypot(s.x - myData.x, s.y - myData.y);
-                if(d < 80) {
-                    if(isHost) { s.hp -= myData.atk; if(s.hp<=0) addGold(10); }
-                    else broadcast({ type: 'slime_damage', id: s.id, dmg: myData.atk });
+                let dist = Math.hypot(s.x - myData.x, s.y - myData.y);
+                if(dist < 80) {
+                    if(isHost) s.hp -= myData.atk;
+                    else broadcast({ type: 'slime_hit', sId: s.id, dmg: myData.atk });
+                    if(s.hp <= 0 && isHost) { gold += 15; myData.xp += 20; checkLevel(); }
                 }
             });
-            // ATAQUE AMIGO (PVP)
+            // PvP (Friendly Fire)
             for(let id in remotePlayers) {
                 let p = remotePlayers[id];
                 if(Math.hypot(p.x - myData.x, p.y - myData.y) < 80) {
-                    broadcast({ type: 'damage', targetId: p.id, dmg: myData.atk });
+                    broadcast({ type: 'hit', target: p.id, dmg: myData.atk });
                 }
             }
         }
 
-        function addGold(val) { gold += val; document.getElementById('gold-val').innerText = gold; }
+        function checkLevel() {
+            if(myData.xp >= 100) {
+                myData.lv++; myData.xp = 0; myData.atk += 5; myData.maxHp += 20; myData.hp = myData.maxHp;
+                document.getElementById('level-tag').innerText = `NIVEL ${myData.lv}`;
+            }
+        }
 
-        function update() {
-            if(!gameActive) return;
+        function respawn() {
+            myData.hp = myData.maxHp; myData.x = 1500; myData.y = 1500;
+        }
+
+        function loop() {
+            if(!gameRunning) return;
+            
+            // Movimiento
             let moving = false;
-            if (keys['w']) { myData.y -= 5; moving = true; }
-            if (keys['s']) { myData.y += 5; moving = true; }
-            if (keys['a']) { myData.x -= 5; moving = true; }
-            if (keys['d']) { myData.x += 5; moving = true; }
-            
-            // Lógica Tienda
-            if(myData.x > shop.x && myData.x < shop.x + shop.w && myData.y > shop.y && myData.y < shop.y + shop.h) {
-                if(gold >= 50) { gold -= 50; myData.atk += 5; document.getElementById('gold-val').innerText = gold; }
+            const s = 5;
+            if(keys['w'] && myData.y > 0) { myData.y -= s; moving = true; }
+            if(keys['s'] && myData.y < WORLD_SIZE) { myData.y += s; moving = true; }
+            if(keys['a'] && myData.x > 0) { myData.x -= s; moving = true; }
+            if(keys['d'] && myData.x < WORLD_SIZE) { myData.x += s; moving = true; }
+            if(myData.state !== 'attack') myData.state = moving ? 'walk' : 'idle';
+
+            // Tienda
+            if(myData.x > shopPos.x && myData.x < shopPos.x + shopPos.size && myData.y > shopPos.y && myData.y < shopPos.y + shopPos.size) {
+                if(gold >= 100) { gold -= 100; myData.atk += 2; }
             }
 
+            // Host: IA Slimes
             if(isHost) {
-                const players = [myData, ...Object.values(remotePlayers)];
-                slimes.forEach(s => {
-                    if(s.hp <= 0) return;
-                    let target = players.sort((a,b) => Math.hypot(a.x-s.x, a.y-s.y) - Math.hypot(b.x-s.x, b.y-s.y))[0];
-                    let d = Math.hypot(target.x - s.x, target.y - s.y);
-                    if(d < 250) { s.x += (target.x-s.x)*0.01; s.y += (target.y-s.y)*0.01; }
+                const targets = [myData, ...Object.values(remotePlayers)];
+                slimes.forEach(sl => {
+                    if(sl.hp <= 0) return;
+                    let nearest = targets.sort((a,b) => Math.hypot(a.x-sl.x, a.y-sl.y) - Math.hypot(b.x-sl.x, b.y-sl.y))[0];
+                    let d = Math.hypot(nearest.x - sl.x, nearest.y - sl.y);
+                    if(d < 300) {
+                        sl.x += (nearest.x - sl.x) * 0.02;
+                        sl.y += (nearest.y - sl.y) * 0.02;
+                        if(d < 25 && Math.random() < 0.05) {
+                            if(nearest.id === myData.id) myData.hp -= 1;
+                            // Daño a clientes se maneja vía sync de vida si se quisiera, aquí es local para fluidez
+                        }
+                    }
                 });
-                broadcast({ type: 'world_sync', slimes: slimes });
+                broadcast({ type: 'world', slimes });
             }
-            broadcast({ type: 'player_sync', data: myData });
-            document.getElementById('hp-bar').style.width = (myData.hp/myData.maxHp)*100 + "%";
-            if(myData.hp <= 0) { myData.hp = 100; myData.x = 1500; myData.y = 1500; }
+
+            broadcast({ type: 'sync', player: myData });
+            
+            // UI Update
+            document.getElementById('hp-fill').style.width = (myData.hp/myData.maxHp)*100 + "%";
+            document.getElementById('xp-fill').style.width = (myData.xp/100)*100 + "%";
+            document.getElementById('gold-ui').innerText = gold;
+
+            draw();
+            requestAnimationFrame(loop);
         }
 
-        function drawEntity(x, y, hp, maxHp, nick, color, acc, angle, state, isSlime) {
+        // --- RENDERIZADO ---
+        function draw() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            const camX = canvas.width/2 - myData.x;
+            const camY = canvas.height/2 - myData.y;
+            
             ctx.save();
-            ctx.translate(x, y);
-            
-            // Barra de vida
-            ctx.fillStyle = "black"; ctx.fillRect(-20, -45, 40, 6);
-            ctx.fillStyle = isSlime ? "#0f0" : "#f00"; ctx.fillRect(-20, -45, 40 * (hp/maxHp), 6);
-            
-            if(isSlime) {
-                ctx.fillStyle = "#44ff44"; ctx.beginPath(); ctx.ellipse(0, 0, 15, 12, 0, 0, Math.PI*2); ctx.fill();
-            } else {
-                ctx.fillStyle = color; ctx.fillRect(-15, -15, 30, 30);
-                ctx.fillStyle = acc; ctx.fillRect(-15, -2, 30, 5);
-                if(state === 'attack') {
-                    ctx.save(); ctx.rotate(angle); ctx.strokeStyle = "white"; ctx.lineWidth = 3;
-                    ctx.beginPath(); ctx.arc(20, 0, 30, -0.8, 0.8); ctx.stroke(); ctx.restore();
-                }
-                ctx.fillStyle = "white"; ctx.textAlign = "center"; ctx.fillText(nick, 0, -55);
+            ctx.translate(camX, camY);
+
+            // Fondo y cuadrícula
+            ctx.fillStyle = '#1b3a1a'; ctx.fillRect(0,0, WORLD_SIZE, WORLD_SIZE);
+            ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+            for(let i=0; i<=WORLD_SIZE; i+=100) {
+                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, WORLD_SIZE); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(WORLD_SIZE, i); ctx.stroke();
             }
+
+            // Tienda (Visual)
+            ctx.fillStyle = '#5d4037'; ctx.fillRect(shopPos.x, shopPos.y, shopPos.size, shopPos.size);
+            ctx.fillStyle = '#ffd700'; ctx.font = 'bold 20px Arial';
+            ctx.fillText("FORJA: +ATK ($100)", shopPos.x + 10, shopPos.y + 100);
+
+            // Slimes
+            slimes.forEach(sl => {
+                if(sl.hp <= 0) return;
+                ctx.fillStyle = '#44ff44';
+                ctx.beginPath(); ctx.ellipse(sl.x, sl.y, 18, 14, 0, 0, Math.PI*2); ctx.fill();
+                // Barra HP Slime
+                ctx.fillStyle = '#000'; ctx.fillRect(sl.x-15, sl.y-25, 30, 4);
+                ctx.fillStyle = '#0f0'; ctx.fillRect(sl.x-15, sl.y-25, 30 * (sl.hp/sl.maxHp), 4);
+            });
+
+            // Otros Jugadores
+            for(let id in remotePlayers) drawChar(remotePlayers[id]);
+            
+            // Mi Jugador
+            drawChar(myData);
+
             ctx.restore();
+            animFrame++;
         }
 
-        function render() {
-            canvas.width = window.innerWidth; canvas.height = window.innerHeight;
-            const camX = canvas.width/2 - myData.x; const camY = canvas.height/2 - myData.y;
-            ctx.save(); ctx.translate(camX, camY);
-
-            // Suelo y Tienda
-            ctx.fillStyle = "rgba(255,255,255,0.05)";
-            for(let i=0; i<=WORLD_SIZE; i+=200) ctx.fillRect(i, 0, 1, WORLD_SIZE), ctx.fillRect(0, i, WORLD_SIZE, 1);
-            ctx.fillStyle = "#8b4513"; ctx.fillRect(shop.x, shop.y, shop.w, shop.h);
-            ctx.fillStyle = "white"; ctx.fillText("TIENDA (Pisa para +ATK $50)", shop.x + 10, shop.y - 10);
-
-            slimes.forEach(s => drawEntity(s.x, s.y, s.hp, s.maxHp, "", "", "", 0, "", true));
-            for(let id in remotePlayers) {
-                let p = remotePlayers[id];
-                drawEntity(p.x, p.y, p.hp, p.maxHp, p.nick, p.skin, p.acc, p.angle, p.state, false);
-            }
-            drawEntity(myData.x, myData.y, myData.hp, myData.maxHp, myData.nick, myData.skin, myData.acc, myData.angle, myData.state, false);
-
+        function drawChar(p) {
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            
+            // Barra HP
+            ctx.fillStyle = '#000'; ctx.fillRect(-20, -45, 40, 6);
+            ctx.fillStyle = (p.id === myData.id) ? '#0f0' : '#f00';
+            ctx.fillRect(-20, -45, 40 * (p.hp/p.maxHp), 6);
+            
+            // Cuerpo
+            let bounce = (p.state === 'walk') ? Math.sin(animFrame * 0.2) * 5 : 0;
+            ctx.save();
+            ctx.scale(p.dir, 1);
+            ctx.fillStyle = p.skin; ctx.fillRect(-15, -15 + bounce, 30, 30);
+            ctx.fillStyle = p.acc; ctx.fillRect(-15, -2 + bounce, 30, 6);
             ctx.restore();
-            update();
-            requestAnimationFrame(render);
+
+            // Nick
+            ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.font = 'bold 12px sans-serif';
+            ctx.fillText(p.nick, 0, -55);
+
+            // Ataque
+            if(p.state === 'attack') {
+                ctx.rotate(p.angle);
+                ctx.strokeStyle = 'white'; ctx.lineWidth = 4;
+                ctx.beginPath(); ctx.arc(20, 0, 35, -0.8, 0.8); ctx.stroke();
+            }
+            ctx.restore();
         }
     </script>
 </body>

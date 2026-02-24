@@ -3,70 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>RPG Neo Genesis: Combat Elite</title>
+    <title>RPG NEO GENESIS: ELITE FINAL</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        :root { --primary: #38bdf8; --accent: #ef4444; --gold: #fbbf24; --glass: rgba(15, 23, 42, 0.9); }
+        :root { --primary: #38bdf8; --accent: #ef4444; --gold: #fbbf24; --glass: rgba(15, 23, 42, 0.95); }
         body { margin: 0; overflow: hidden; background: #070a0e; font-family: 'Segoe UI', sans-serif; color: white; touch-action: none; }
-        canvas { display: block; background: #0a0f0a; }
+        canvas { display: block; background: #0a0f0a; cursor: crosshair; }
         .glass { background: var(--glass); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; }
         
-        /* Sala ID Esquina */
-        #room-id-tag { position: absolute; top: 10px; right: 10px; padding: 8px 15px; font-family: monospace; font-size: 14px; color: var(--primary); border: 1px solid var(--primary); z-index: 1000; display: none; cursor: pointer; }
+        /* Sala ID */
+        #room-id-tag { position: absolute; top: 10px; right: 10px; padding: 10px; font-family: monospace; font-size: 14px; color: var(--primary); border: 1px solid var(--primary); z-index: 1000; display: none; cursor: pointer; background: rgba(0,0,0,0.5); }
 
         /* HUD */
-        #hud { position: absolute; top: 15px; left: 15px; padding: 12px; min-width: 160px; z-index: 500; pointer-events: none; }
-        .bar { height: 6px; border-radius: 3px; margin-top: 5px; overflow: hidden; background: #334155; }
+        #hud { position: absolute; top: 15px; left: 15px; padding: 12px; min-width: 180px; z-index: 500; pointer-events: none; }
+        .bar { height: 8px; border-radius: 4px; margin-top: 5px; overflow: hidden; background: #334155; border: 1px solid rgba(255,255,255,0.1); }
         #hp-fill { height: 100%; width: 100%; background: var(--accent); transition: 0.1s; }
         #xp-fill { height: 100%; width: 0%; background: #a855f7; }
-        .stats-text { font-size: 12px; display: flex; justify-content: space-between; margin-top: 5px; font-weight: bold; }
+        .stats-text { font-size: 13px; display: flex; justify-content: space-between; margin-top: 5px; font-weight: bold; text-shadow: 1px 1px 2px black; }
 
-        /* Tienda */
-        #shop-ui { position: absolute; top: 50%; right: 20px; transform: translateY(-50%); width: 260px; padding: 15px; display: none; z-index: 600; max-height: 70vh; overflow-y: auto; border: 2px solid var(--gold); }
-        .shop-item { background: rgba(255,255,255,0.05); border: 1px solid #334155; padding: 8px; border-radius: 8px; margin-bottom: 5px; cursor: pointer; font-size: 13px; }
-        
-        /* Controles */
+        /* Tienda e Inventario */
+        #shop-ui { position: absolute; top: 50%; right: 20px; transform: translateY(-50%); width: 280px; padding: 15px; display: none; z-index: 600; max-height: 80vh; overflow-y: auto; border: 2px solid var(--gold); box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        .shop-item { background: rgba(255,255,255,0.05); border: 1px solid #334155; padding: 10px; border-radius: 8px; margin-bottom: 8px; cursor: pointer; transition: 0.2s; }
+        .shop-item:hover { background: rgba(255,255,255,0.1); border-color: var(--gold); }
+        .rarity-legendary { border-color: var(--gold); color: var(--gold); box-shadow: inset 0 0 10px rgba(251, 191, 36, 0.2); }
+
+        /* Controles Móvil */
         #mobile-controls { position: absolute; inset: 0; pointer-events: none; display: none; }
-        #joystick-zone { position: absolute; bottom: 40px; left: 40px; width: 110px; height: 110px; background: rgba(255,255,255,0.05); border-radius: 50%; pointer-events: auto; border: 2px solid rgba(255,255,255,0.1); }
-        #joystick-stick { position: absolute; top: 30px; left: 30px; width: 50px; height: 50px; background: var(--primary); border-radius: 50%; opacity: 0.6; }
-        #attack-btn { position: absolute; bottom: 50px; right: 40px; width: 80px; height: 80px; background: var(--accent); border-radius: 50%; pointer-events: auto; display: flex; justify-content: center; align-items: center; font-size: 30px; opacity: 0.8; }
+        #joystick-zone { position: absolute; bottom: 50px; left: 50px; width: 120px; height: 120px; background: rgba(255,255,255,0.05); border-radius: 50%; pointer-events: auto; border: 2px solid rgba(255,255,255,0.1); }
+        #joystick-stick { position: absolute; top: 35px; left: 35px; width: 50px; height: 50px; background: var(--primary); border-radius: 50%; opacity: 0.7; pointer-events: none; }
+        #attack-btn { position: absolute; bottom: 60px; right: 50px; width: 90px; height: 90px; background: var(--accent); border-radius: 50%; pointer-events: auto; display: flex; justify-content: center; align-items: center; font-size: 35px; opacity: 0.8; box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); }
+        #shop-btn-mob { position: absolute; top: 70px; right: 10px; width: 50px; height: 50px; display: flex; justify-content: center; align-items: center; font-size: 24px; pointer-events: auto; }
 
-        #setup { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 30px; text-align: center; z-index: 1000; width: 280px; }
-        input { background: #1e293b; border: 1px solid #334155; color: white; padding: 12px; border-radius: 8px; width: 90%; margin-bottom: 10px; font-size: 16px; }
-        button { background: var(--primary); border: none; padding: 12px; font-weight: bold; border-radius: 8px; cursor: pointer; width: 100%; color: #000; }
+        /* Login */
+        #setup { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 30px; text-align: center; z-index: 1000; width: 300px; box-shadow: 0 0 50px rgba(0,0,0,0.8); }
+        input { background: #1e293b; border: 1px solid #334155; color: white; padding: 12px; border-radius: 8px; width: 90%; margin-bottom: 12px; font-size: 16px; outline: none; }
+        input:focus { border-color: var(--primary); }
+        button { background: var(--primary); border: none; padding: 14px; font-weight: bold; border-radius: 8px; cursor: pointer; width: 100%; color: #000; text-transform: uppercase; letter-spacing: 1px; }
+        button:active { transform: scale(0.98); }
     </style>
 </head>
 <body>
 
-    <div id="room-id-tag" class="glass" onclick="copyRoomId()">ID: ---</div>
+    <div id="room-id-tag" class="glass" onclick="copyRoomId()">SALA: --- (Click para copiar)</div>
 
     <div id="setup" class="glass">
-        <h2 style="color:var(--primary); margin:0 0 15px 0;">NEO GENESIS</h2>
-        <input type="text" id="playerName" placeholder="Tu Nombre">
+        <h1 style="color:var(--primary); margin:0 0 5px 0; font-size: 24px;">NEO GENESIS</h1>
+        <p style="font-size: 10px; margin-bottom: 20px; opacity: 0.6;">SISTEMA MULTIJUGADOR DE ÉLITE</p>
+        <input type="text" id="playerName" placeholder="Nombre del Guerrero">
         <button onclick="startHost()">CREAR REINO</button>
-        <input type="text" id="joinId" placeholder="ID de la Sala" style="margin-top:10px">
-        <button onclick="startJoin()" style="background:#475569; color:white;">UNIRSE</button>
+        <div style="margin: 15px; font-size: 12px; opacity: 0.4;">— O ÚNETE A UNO —</div>
+        <input type="text" id="joinId" placeholder="ID del Reino">
+        <button onclick="startJoin()" style="background:#475569; color:white;">UNIRSE AL REINO</button>
+        <p id="status-msg" style="font-size: 11px; margin-top: 15px; color: var(--gold);"></p>
     </div>
 
     <div id="hud" class="glass" style="display:none">
-        <div id="d-name">---</div>
+        <div id="d-name" style="font-size: 16px; font-weight: bold; color: var(--primary);">---</div>
         <div class="stats-text"><span id="d-lv">LV. 1</span> <span id="d-gold" style="color:var(--gold)">$0</span></div>
         <div class="bar"><div id="hp-fill"></div></div>
-        <div class="bar" style="height:3px; margin-top:3px"><div id="xp-fill"></div></div>
+        <div class="bar" style="height:4px; margin-top:4px"><div id="xp-fill"></div></div>
+        <div style="font-size: 9px; margin-top: 5px; opacity: 0.5;">TECLA [E] TIENDA</div>
     </div>
 
     <div id="shop-ui" class="glass">
-        <h3 style="margin:0 0 10px 0; color:var(--gold)">MERCADO</h3>
+        <h3 style="margin:0 0 15px 0; color:var(--gold); text-align: center; border-bottom: 1px solid #334155; padding-bottom: 5px;">MERCADO ARCANO</h3>
         <div id="shop-list"></div>
-        <button onclick="toggleShop()" style="background:#334155; color:white; margin-top:10px">CERRAR</button>
+        <button onclick="toggleShop()" style="background:#334155; color:white; margin-top:15px">CERRAR</button>
     </div>
 
     <div id="mobile-controls">
         <div id="joystick-zone"><div id="joystick-stick"></div></div>
         <div id="attack-btn">⚔️</div>
+        <div id="shop-btn-mob" class="glass" onclick="toggleShop()">🛒</div>
     </div>
 
 <script>
+// --- CONFIGURACIÓN BASE ---
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth; canvas.height = window.innerHeight;
@@ -74,35 +86,48 @@ canvas.width = window.innerWidth; canvas.height = window.innerHeight;
 let world = [], players = {}, slimes = [], connections = {}, peer = null;
 let myId = null, isHost = false, isDead = false;
 let camera = { x: 0, y: 0 }, keys = {};
-let me = { x: 2000, y: 2000, name: "", hp: 100, maxHp: 100, lv: 1, xp: 0, gold: 100, atkF: 0, weapon: 'w1', angle: 0 };
+let me = { x: 2000, y: 2000, name: "", hp: 100, maxHp: 100, lv: 1, xp: 0, gold: 150, atkF: 0, weapon: 'w1', angle: 0 };
 
+// --- GENERACIÓN DE 100 ARMAS ---
 const WEAPONS = {};
-const weaponNames = ["Espada", "Daga", "Hacha", "Lanza", "Martillo"];
-const materials = ["Madera", "Hierro", "Acero", "Obsidiana", "Mithril", "Diamante", "Génesis"];
+const wTypes = ["Espada", "Daga", "Hacha", "Lanza", "Martillo", "Sable", "Guadaña", "Maza", "Cimitarra", "Claymore"];
+const wMats = ["Madera", "Hierro", "Bronce", "Acero", "Plata", "Obsidiana", "Mithril", "Diamante", "Dragón", "Génesis"];
 
-let count = 0;
-materials.forEach(m => {
-    weaponNames.forEach(w => {
-        count++;
-        let rarity = count < 10 ? 'common' : count < 25 ? 'rare' : 'epic';
-        WEAPONS[`w${count}`] = {
-            name: `${w} de ${m}`,
-            range: 50 + (count * 2),
-            dmg: 10 + (count * 3),
-            color: count > 30 ? '#fbbf24' : count > 15 ? '#a855f7' : '#38bdf8',
-            price: count * 40
+let wCount = 0;
+wMats.forEach((m, mIdx) => {
+    wTypes.forEach((t, tIdx) => {
+        wCount++;
+        let power = (mIdx * 10) + tIdx;
+        let rarity = mIdx < 3 ? 'common' : mIdx < 6 ? 'rare' : mIdx < 9 ? 'epic' : 'legendary';
+        WEAPONS[`w${wCount}`] = {
+            name: `${t} de ${m}`,
+            range: 45 + (power * 1.5),
+            dmg: 10 + (power * 4),
+            color: rarity === 'legendary' ? '#fbbf24' : rarity === 'epic' ? '#a855f7' : rarity === 'rare' ? '#3b82f6' : '#ffffff',
+            price: wCount * 60,
+            rarity: rarity,
+            area: rarity === 'legendary' ? 6.28 : 1.6
         };
     });
 });
 
+// --- 10 TIPOS DE ENEMIGOS ---
 const ENEMY_TYPES = [
-    { n: "Slime", hp: 30, speed: 1.5, color: "#4ade80", xp: 20, gold: 10, size: 15 },
-    { n: "Sombra", hp: 60, speed: 2.2, color: "#4c1d95", xp: 50, gold: 40, size: 20 }
+    { n: "Slime Verde", hp: 40, spd: 1.5, col: "#4ade80", xp: 25, g: 15, sz: 16 },
+    { n: "Slime Azul", hp: 60, spd: 1.8, col: "#3b82f6", xp: 35, g: 25, sz: 18 },
+    { n: "Slime Rojo", hp: 100, spd: 2.0, col: "#ef4444", xp: 60, g: 50, sz: 20 },
+    { n: "Sombra", hp: 150, spd: 2.5, col: "#4c1d95", xp: 100, g: 100, sz: 22 },
+    { n: "Espectro", hp: 80, spd: 3.2, col: "#a5f3fc", xp: 90, g: 80, sz: 15 },
+    { n: "Golem Roca", hp: 400, spd: 0.8, col: "#4b5563", xp: 250, g: 200, sz: 35 },
+    { n: "Ojo Sangriento", hp: 200, spd: 2.8, col: "#991b1b", xp: 180, g: 150, sz: 19 },
+    { n: "Cristalino", hp: 300, spd: 2.2, col: "#22d3ee", xp: 300, g: 250, sz: 24 },
+    { n: "Demonio Menor", hp: 500, spd: 2.0, col: "#1e1b4b", xp: 500, g: 450, sz: 30 },
+    { n: "REY GÉNESIS", hp: 2500, spd: 1.2, col: "#fbbf24", xp: 2000, g: 5000, sz: 65 }
 ];
 
-// --- MOBILE ---
+// --- SISTEMA MÓVIL ---
 let joyX = 0, joyY = 0;
-const isTouch = ('ontouchstart' in window);
+const isTouch = ('ontouchstart' in window || navigator.maxTouchPoints > 0);
 if(isTouch) {
     document.getElementById('mobile-controls').style.display = 'block';
     const jZone = document.getElementById('joystick-zone');
@@ -119,41 +144,61 @@ if(isTouch) {
     document.getElementById('attack-btn').addEventListener('touchstart', e => { e.preventDefault(); doAttack(); });
 }
 
-// --- RED ---
+// --- LÓGICA DE RED (PeerJS) ---
 function startHost() {
-    me.name = document.getElementById('playerName').value || "Host";
-    isHost = true;
-    for(let i=0; i<15; i++) spawnEnemy();
-    peer = new Peer();
-    peer.on('open', id => { myId=id; players[id]=me; showId(id); initGame(); });
+    const name = document.getElementById('playerName').value;
+    if(!name) return alert("Ingresa tu nombre");
+    me.name = name; isHost = true;
+    document.getElementById('status-msg').innerText = "Invocando el Reino...";
+    
+    peer = new Peer(null, { debug: 1 });
+    peer.on('open', id => {
+        myId = id; players[id] = me; showRoomId(id); initGame();
+        for(let i=0; i<20; i++) spawnEnemy();
+    });
     peer.on('connection', conn => {
-        conn.on('open', () => { connections[conn.peer]=conn; conn.send({type:'init', players, slimes}); });
+        conn.on('open', () => {
+            connections[conn.peer] = conn;
+            conn.send({type:'init', players, slimes});
+        });
         conn.on('data', data => handleData(data, conn.peer));
     });
 }
 
 function startJoin() {
     const hostId = document.getElementById('joinId').value.trim();
-    me.name = document.getElementById('playerName').value || "Invitado";
+    const name = document.getElementById('playerName').value;
+    if(!hostId || !name) return alert("ID o Nombre faltante");
+    me.name = name;
+    document.getElementById('status-msg').innerText = "Buscando portal...";
+
     peer = new Peer();
     peer.on('open', id => {
-        myId=id; players[id]=me; showId(hostId);
+        myId = id; players[id] = me;
         const conn = peer.connect(hostId);
-        conn.on('open', () => { connections[hostId]=conn; conn.send({type:'join', p:me}); initGame(); });
+        conn.on('open', () => {
+            connections[hostId] = conn;
+            conn.send({type:'join', p:me});
+            showRoomId(hostId);
+            initGame();
+        });
         conn.on('data', data => handleData(data, hostId));
     });
 }
 
 function handleData(data, senderId) {
-    if (data.type === 'init') { players=data.players; slimes=data.slimes; players[myId]=me; }
-    if (data.type === 'join') { players[senderId]=data.p; if(isHost) broadcast({type:'new', id:senderId, p:data.p}); }
-    if (data.type === 'new') { players[data.id]=data.p; }
+    if (data.type === 'init') { players = data.players; slimes = data.slimes; players[myId] = me; }
+    if (data.type === 'join') { players[senderId] = data.p; if(isHost) broadcast({type:'new', id:senderId, p:data.p}); }
+    if (data.type === 'new') { players[data.id] = data.p; }
     if (data.type === 'sync') { if(players[senderId]) Object.assign(players[senderId], data); if(isHost) broadcast(data, senderId); }
     if (data.type === 'slime_update') slimes = data.slimes;
     if (data.type === 'hit' && data.tid === myId) takeDamage(data.dmg);
     if (data.type === 'kill_slime' && isHost) {
         slimes = slimes.filter(s => {
-            if(s.id === data.sid) { s.hp -= data.dmg; if(s.hp<=0) { spawnEnemy(); return false; } }
+            if(s.id === data.sid) {
+                s.hp -= data.dmg;
+                if(s.hp <= 0) { spawnEnemy(); return false; }
+            }
             return true;
         });
     }
@@ -161,20 +206,12 @@ function handleData(data, senderId) {
 
 function broadcast(data, skip=null) { for(let id in connections) if(id!==skip) connections[id].send(data); }
 
-function showId(id) {
-    const tag = document.getElementById('room-id-tag');
-    tag.innerText = "SALA: " + id;
-    tag.style.display = "block";
-}
-
+// --- LÓGICA DE JUEGO ---
 function initGame() {
     document.getElementById('setup').style.display='none';
     document.getElementById('hud').style.display='block';
     fillShop();
-    window.addEventListener('keydown', e => { 
-        keys[e.key.toLowerCase()]=true; 
-        if(e.key === 'e') toggleShop();
-    });
+    window.addEventListener('keydown', e => { keys[e.key.toLowerCase()]=true; if(e.key==='e') toggleShop(); });
     window.addEventListener('keyup', e => keys[e.key.toLowerCase()]=false);
     canvas.addEventListener('mousedown', doAttack);
     requestAnimationFrame(loop);
@@ -182,18 +219,20 @@ function initGame() {
 
 function doAttack() {
     if(isDead || me.atkF > 0) return;
-    me.atkF = 15; // Inicia animación
+    me.atkF = 14; 
     const w = WEAPONS[me.weapon];
 
-    // Lógica de daño a Slimes
+    // Daño a Enemigos
     slimes.forEach(s => {
-        if(Math.hypot(s.x - me.x, s.y - me.y) < w.range + 20) {
-            if(isHost) { s.hp -= w.dmg; if(s.hp <= 0) { addXP(20); me.gold += 15; slimes = slimes.filter(sl => sl.id !== s.id); spawnEnemy(); } }
-            else connections[Object.keys(connections)[0]].send({type:'kill_slime', sid: s.id, dmg: w.dmg});
+        if(Math.hypot(s.x - me.x, s.y - me.y) < w.range + 25) {
+            if(isHost) {
+                s.hp -= w.dmg;
+                if(s.hp <= 0) { addXP(s.xp); me.gold += s.g; slimes = slimes.filter(sl => sl.id !== s.id); spawnEnemy(); }
+            } else connections[Object.keys(connections)[0]].send({type:'kill_slime', sid: s.id, dmg: w.dmg});
         }
     });
 
-    // Lógica de daño a Jugadores (Friendly Fire)
+    // Daño a Jugadores (Friendly Fire)
     for(let id in players) {
         if(id === myId) continue;
         if(Math.hypot(players[id].x - me.x, players[id].y - me.y) < w.range) {
@@ -204,77 +243,82 @@ function doAttack() {
 }
 
 function spawnEnemy() {
-    let x = 1500 + Math.random()*1000, y = 1500 + Math.random()*1000;
-    let t = ENEMY_TYPES[Math.random() > 0.8 ? 1 : 0];
+    let x = 1000 + Math.random()*2000, y = 1000 + Math.random()*2000;
+    let dist = Math.hypot(x-2000, y-2000);
+    let level = Math.min(9, Math.floor(dist / 250));
+    let t = ENEMY_TYPES[level];
     slimes.push({id: Math.random(), x, y, ...t});
 }
 
 function loop() {
-    const v = 4.5;
+    const v = 5;
     if(!isDead) {
         if(isTouch && (joyX !== 0 || joyY !== 0)) { me.x += joyX*v; me.y += joyY*v; }
         else {
             let dx = 0, dy = 0;
             if(keys['a']) dx--; if(keys['d']) dx++; if(keys['w']) dy--; if(keys['s']) dy++;
-            if(dx !== 0 || dy !== 0) {
-                me.angle = Math.atan2(dy, dx);
-                me.x += dx*v; me.y += dy*v;
-            }
+            if(dx !== 0 || dy !== 0) { me.angle = Math.atan2(dy, dx); me.x += dx*v; me.y += dy*v; }
         }
     }
 
     if(me.atkF > 0) me.atkF--;
     players[myId] = me;
-    camera.x=me.x-canvas.width/2; camera.y=me.y-canvas.height/2;
-    ctx.clearRect(0,0,canvas.width,canvas.height); ctx.save(); ctx.translate(-camera.x, -camera.y);
+    camera.x = me.x - canvas.width/2; camera.y = me.y - canvas.height/2;
 
-    // Suelo
-    ctx.fillStyle = "#0d1a0d"; ctx.fillRect(0,0,4000,4000);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.save(); ctx.translate(-camera.x, -camera.y);
 
-    // Slimes
+    // Suelo Dinámico
+    let dist = Math.hypot(me.x-2000, me.y-2000);
+    ctx.fillStyle = dist > 1200 ? "#050505" : "#0d1a0d";
+    ctx.fillRect(0,0,4000,4000);
+    // Cuadrícula decorativa
+    ctx.strokeStyle = "rgba(255,255,255,0.03)";
+    for(let i=0; i<4000; i+=100){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,4000); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(4000,i); ctx.stroke(); }
+
     if(isHost) {
         slimes.forEach(s => {
-            let target = null, minDist = 500;
+            let target = null, minDist = 600;
             for(let id in players) {
                 let d = Math.hypot(players[id].x-s.x, players[id].y-s.y);
                 if(d < minDist) { minDist = d; target = players[id]; }
             }
             if(target) {
                 let a = Math.atan2(target.y-s.y, target.x-s.x);
-                s.x += Math.cos(a)*s.speed; s.y += Math.sin(a)*s.speed;
-                if(minDist < 25) takeDamage(0.3);
+                s.x += Math.cos(a)*s.spd; s.y += Math.sin(a)*s.spd;
+                if(minDist < 30) takeDamage(s.spd/3);
             }
         });
         broadcast({type:'slime_update', slimes});
     }
+
+    // Dibujar Slimes
     slimes.forEach(s => {
-        ctx.fillStyle = s.color; ctx.beginPath(); ctx.ellipse(s.x, s.y, s.size, s.size*0.8, 0, 0, 7); ctx.fill();
+        ctx.fillStyle = s.col; ctx.beginPath(); ctx.ellipse(s.x, s.y, s.sz, s.sz*0.8, 0, 0, 7); ctx.fill();
+        ctx.fillStyle = "white"; ctx.font = "10px Arial"; ctx.textAlign = "center"; ctx.fillText(s.n, s.x, s.y - s.sz - 5);
     });
 
-    // Jugadores y Armas
+    // Dibujar Jugadores y Armas Físicas
     for(let id in players) {
         let p = players[id];
         if(id !== myId) { p.x+=(p.targetX-p.x)*0.2; p.y+=(p.targetY-p.y)*0.2; }
         else { broadcast({type:'sync', x:me.x, y:me.y, weapon:me.weapon, hp:me.hp, atk:me.atkF, lv:me.lv, gold:me.gold, angle:me.angle}); }
 
-        // Dibujar Arma (Física)
         const w = WEAPONS[p.weapon];
         ctx.save();
         ctx.translate(p.x, p.y);
-        ctx.rotate(p.angle + (p.atk > 0 ? (15 - p.atk) * 0.2 : 0)); // Animación de giro al atacar
+        ctx.rotate(p.angle + (p.atk > 0 ? (14 - p.atk) * 0.3 : 0));
         
+        // El Arma Visual
         ctx.fillStyle = w.color;
-        // Mango y Hoja
-        ctx.fillRect(10, -2, w.range, 4); 
-        ctx.fillStyle = "rgba(255,255,255,0.3)";
-        ctx.fillRect(10, -2, 10, 4); // Guarda
+        ctx.fillRect(10, -3, w.range, 6); // Hoja
+        ctx.fillStyle = "#333"; ctx.fillRect(8, -5, 4, 10); // Guarda
         ctx.restore();
 
-        // Cuerpo Jugador
+        // El Jugador
         ctx.fillStyle = id === myId ? "#38bdf8" : "#f472b6";
-        ctx.fillRect(p.x-12, p.y-12, 24, 24);
-        ctx.fillStyle="white"; ctx.font="10px Arial"; ctx.textAlign="center";
-        ctx.fillText(p.name, p.x, p.y-18);
+        ctx.fillRect(p.x-15, p.y-15, 30, 30);
+        ctx.fillStyle="white"; ctx.font="bold 12px Arial"; ctx.fillText(p.name + " Lv." + p.lv, p.x, p.y-25);
     }
 
     ctx.restore(); requestAnimationFrame(loop);
@@ -282,17 +326,17 @@ function loop() {
 
 function takeDamage(a) { 
     me.hp -= a; updateHUD(); 
-    if(me.hp<=0 && !isDead) { isDead=true; location.reload(); } 
+    if(me.hp <= 0 && !isDead) { isDead = true; alert("HAS CAÍDO EN COMBATE"); location.reload(); } 
 }
 
 function addXP(amt) {
-    me.xp += amt; if(me.xp >= 100){ me.lv++; me.xp=0; me.maxHp+=20; me.hp=me.maxHp; }
+    me.xp += amt; if(me.xp >= 100){ me.lv++; me.xp=0; me.maxHp+=25; me.hp=me.maxHp; }
     updateHUD();
 }
 
 function updateHUD() {
-    document.getElementById('d-name').innerText = me.name;
-    document.getElementById('d-lv').innerText = "LV. " + me.lv;
+    document.getElementById('d-name').innerText = me.name + " (" + WEAPONS[me.weapon].name + ")";
+    document.getElementById('d-lv').innerText = "NIVEL " + me.lv;
     document.getElementById('d-gold').innerText = "$" + Math.floor(me.gold);
     document.getElementById('hp-fill').style.width = (me.hp/me.maxHp*100) + "%";
     document.getElementById('xp-fill').style.width = me.xp + "%";
@@ -303,17 +347,21 @@ function fillShop() {
     Object.keys(WEAPONS).forEach(k => {
         const w = WEAPONS[k];
         const div = document.createElement('div');
-        div.className = 'shop-item';
-        div.innerHTML = `<strong>${w.name}</strong><br>$${w.price} | Dmg: ${w.dmg}`;
-        div.onclick = () => { if(me.gold >= w.price){ me.gold-=w.price; me.weapon=k; updateHUD(); alert("Equipado!"); } };
+        div.className = `shop-item rarity-${w.rarity}`;
+        div.innerHTML = `<strong>${w.name}</strong><br>$${w.price} | Dmg: ${w.dmg} | Alcance: ${Math.floor(w.range)}`;
+        div.onclick = () => {
+            if(me.gold >= w.price){ me.gold-=w.price; me.weapon=k; updateHUD(); }
+            else alert("Oro insuficiente");
+        };
         list.appendChild(div);
     });
 }
-function toggleShop() { const s=document.getElementById('shop-ui'); s.style.display=s.style.display==='block'?'none':'block'; }
+
+function toggleShop() { const s = document.getElementById('shop-ui'); s.style.display = s.style.display==='block' ? 'none' : 'block'; }
+function showRoomId(id) { const t = document.getElementById('room-id-tag'); t.innerText = "SALA: " + id; t.style.display = "block"; }
 function copyRoomId() {
-    const text = document.getElementById('room-id-tag').innerText.split(': ')[1];
-    navigator.clipboard.writeText(text);
-    alert("Código copiado: " + text);
+    const id = document.getElementById('room-id-tag').innerText.split(': ')[1].split(' ')[0];
+    navigator.clipboard.writeText(id); alert("ID de sala copiado!");
 }
 </script>
 </body>

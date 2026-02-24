@@ -1,119 +1,113 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-    <title>RPG 2D Multiplayer</title>
+    <meta charset="UTF-8">
+    <title>RPG 2D - Versión Final</title>
     <style>
-        body { margin: 0; background: #4a7023; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
+        body { margin: 0; background: #4a7023; overflow: hidden; font-family: sans-serif; }
         canvas { display: block; image-rendering: pixelated; }
-        #ui { position: absolute; bottom: 10px; left: 10px; color: white; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; pointer-events: none; }
+        #gui {
+            position: absolute; top: 10px; left: 10px;
+            background: rgba(0,0,0,0.7); color: white;
+            padding: 15px; border-radius: 8px; pointer-events: none;
+        }
     </style>
 </head>
 <body>
-    <div id="ui">WASD: Mover | CLICK: Atacar/Construir</div>
+    <div id="gui">
+        <strong>CONTROLES:</strong><br>
+        Moverse: <b style="color: #ffeb3b;">WASD</b> (Bloque a bloque)<br>
+        Acción: <b style="color: #ffeb3b;">CLICK</b> (Ataca y pone bloque)
+    </div>
     <canvas id="game"></canvas>
 
-    <script src="/socket.io/socket.io.js"></script>
     <script>
         const canvas = document.getElementById("game");
         const ctx = canvas.getContext("2d");
-        const socket = io();
 
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
         const TILE = 40; // Tamaño del bloque
-        let myId;
-        let players = {};
-        let world = {};
-        let isAttacking = false;
+        const world = {}; // Almacena los bloques
+        
+        const player = {
+            x: TILE * 2,
+            y: TILE * 2,
+            color: "#3498db",
+            name: "JUGADOR 1",
+            isAttacking: false
+        };
 
-        socket.on('init', (data) => {
-            players = data.players;
-            world = data.world;
-            myId = socket.id;
-        });
-
-        socket.on('newPlayer', (data) => players[data.id] = data.info);
-        socket.on('playerMoved', (data) => { if(players[data.id]) { players[data.id].x = data.x; players[data.id].y = data.y; }});
-        socket.on('playerAttacked', (data) => { if(players[data.id]) players[data.id].attacking = true; setTimeout(() => players[data.id].attacking = false, 200); });
-        socket.on('worldUpdate', (data) => { if (data.type) world[data.key] = data.type; else delete world[data.key]; });
-        socket.on('playerDisconnected', (id) => delete players[id]);
-
-        // Movimiento por celdas (No infinito)
+        // Movimiento por rejilla (Grid-based)
         window.addEventListener('keydown', (e) => {
-            if (!players[myId]) return;
-            let nextX = players[myId].x;
-            let nextY = players[myId].y;
-
-            if (e.key.toLowerCase() === 'w') nextY -= TILE;
-            if (e.key.toLowerCase() === 's') nextY += TILE;
-            if (e.key.toLowerCase() === 'a') nextX -= TILE;
-            if (e.key.toLowerCase() === 'd') nextX += TILE;
-
-            // Colisión simple con bordes de pantalla
-            if (nextX >= 0 && nextX < canvas.width && nextY >= 0 && nextY < canvas.height) {
-                players[myId].x = nextX;
-                players[myId].y = nextY;
-                socket.emit('move', { x: nextX, y: nextY });
-            }
+            const key = e.key.toLowerCase();
+            if (key === 'w') player.y -= TILE;
+            if (key === 's') player.y += TILE;
+            if (key === 'a') player.x -= TILE;
+            if (key === 'd') player.x += TILE;
+            
+            // Límites de pantalla
+            player.x = Math.max(0, Math.min(player.x, canvas.width - TILE));
+            player.y = Math.max(0, Math.min(player.y, canvas.height - TILE));
         });
 
-        // Ataque visual
-        canvas.addEventListener('mousedown', (e) => {
-            if (!players[myId]) return;
-            isAttacking = true;
-            socket.emit('attack'); // Avisar al servidor que atacamos
-            
-            // Lógica de construcción/minería (opcional)
+        // Ataque y Construcción
+        window.addEventListener('mousedown', (e) => {
+            // Activar arma
+            player.isAttacking = true;
+            setTimeout(() => player.isAttacking = false, 150);
+
+            // Coordenadas de la rejilla
             const gx = Math.floor(e.clientX / TILE);
             const gy = Math.floor(e.clientY / TILE);
-            socket.emit('blockUpdate', { key: `${gx},${gy}`, type: world[`${gx},${gy}`] ? null : "#3d2817" });
+            const key = `${gx},${gy}`;
 
-            setTimeout(() => isAttacking = false, 200);
+            // Si hay bloque lo quita, si no, pone uno
+            if (world[key]) {
+                delete world[key];
+            } else {
+                world[key] = "#5d4037"; // Color tierra
+            }
         });
 
-        function drawPlayer(id, p) {
-            // 1. Cuerpo del jugador
-            ctx.fillStyle = p.color;
-            ctx.fillRect(p.x, p.y, TILE, TILE);
-            ctx.strokeStyle = "black";
-            ctx.strokeRect(p.x, p.y, TILE, TILE);
-
-            // 2. Nametag (Nombre)
-            ctx.fillStyle = "white";
-            ctx.font = "bold 12px Arial";
-            ctx.textAlign = "center";
-            const displayName = id === myId ? "TÚ (P1)" : "JUGADOR";
-            ctx.fillText(displayName, p.x + TILE/2, p.y - 10);
-
-            // 3. Arma (Solo se ve si está atacando)
-            if (p.attacking || (id === myId && isAttacking)) {
-                ctx.fillStyle = "silver";
-                // Dibuja una "espada" a la derecha
-                ctx.fillRect(p.x + TILE, p.y + TILE/4, 15, 5); 
-                ctx.fillStyle = "#5d4037"; // Mango
-                ctx.fillRect(p.x + TILE - 5, p.y + TILE/4, 5, 5);
-            }
-        }
-
-        function loop() {
+        function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Dibujar bloques del mundo
+            // 1. Dibujar el mundo (bloques)
             for (let key in world) {
                 const [x, y] = key.split(',').map(Number);
                 ctx.fillStyle = world[key];
                 ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
+                ctx.strokeStyle = "rgba(0,0,0,0.2)";
+                ctx.strokeRect(x * TILE, y * TILE, TILE, TILE);
             }
 
-            // Dibujar a todos los jugadores
-            for (let id in players) {
-                drawPlayer(id, players[id]);
+            // 2. Dibujar Nametag
+            ctx.fillStyle = "white";
+            ctx.font = "bold 14px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(player.name, player.x + TILE/2, player.y - 12);
+
+            // 3. Dibujar Jugador
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, TILE, TILE);
+            ctx.strokeStyle = "black";
+            ctx.lineWidth = 2;
+            ctx.strokeRect(player.x, player.y, TILE, TILE);
+
+            // 4. Dibujar Arma (Solo si está atacando)
+            if (player.isAttacking) {
+                ctx.fillStyle = "#dfe6e9"; // Hoja de la espada
+                ctx.fillRect(player.x + TILE - 5, player.y + 15, 25, 8);
+                ctx.fillStyle = "#2d3436"; // Mango
+                ctx.fillRect(player.x + TILE - 5, player.y + 12, 5, 14);
             }
 
-            requestAnimationFrame(loop);
+            requestAnimationFrame(draw);
         }
-        loop();
+
+        draw();
     </script>
 </body>
 </html>

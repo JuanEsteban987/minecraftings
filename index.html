@@ -3,78 +3,160 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2D Minecraft RPG - Cámara y Reinos</title>
+    <title>2D Minecraft RPG - Versión Final</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #4a90e2; font-family: 'Courier New', Courier, monospace; }
-        canvas { display: block; image-rendering: pixelated; }
-        
-        /* Panel de Conexión */
-        #ui { 
-            position: absolute; top: 15px; left: 15px; 
-            background: rgba(45, 45, 45, 0.9); color: #fff; 
-            padding: 20px; border: 4px solid #1e1e1e;
-            box-shadow: 6px 6px 0px rgba(0,0,0,0.4); z-index: 10;
+        /* Reset de estilos básicos */
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: #4a90e2; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
         }
-        #ui b { color: #ffca28; display: block; margin-bottom: 5px; }
+        canvas { 
+            display: block; 
+            image-rendering: pixelated; 
+        }
+        
+        /* Pantalla de Inicio / Menú de Reinos */
+        #pantalla-inicio { 
+            position: absolute; 
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            z-index: 100;
+            color: white;
+            text-align: center;
+        }
+
+        .panel-login {
+            background: #3c3c3c;
+            padding: 30px;
+            border: 4px solid #1e1e1e;
+            box-shadow: 8px 8px 0px rgba(0,0,0,0.5);
+        }
+
+        h1 { color: #ffca28; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 2px; }
+        
+        .campo { margin-bottom: 15px; text-align: left; }
+        label { display: block; font-size: 12px; font-weight: bold; color: #aaa; margin-bottom: 5px; }
+        
         input { 
             background: #1e1e1e; border: 2px solid #555; color: #00ff00;
-            padding: 8px; margin-bottom: 10px; width: 180px; outline: none;
+            padding: 10px; width: 250px; outline: none; font-family: monospace;
         }
-        button { 
-            cursor: pointer; padding: 10px; background: #4CAF50; 
-            color: white; border: 2px solid #2e7d32; font-weight: bold;
-            width: 100%; box-shadow: 3px 3px 0px #1b5e20;
-        }
-        button:active { transform: translate(2px, 2px); box-shadow: 0px 0px 0px; }
 
-        /* Hotbar de Bloques */
-        #creative-menu {
+        button { 
+            cursor: pointer; padding: 12px 25px; background: #4CAF50; 
+            color: white; border: none; font-weight: bold;
+            text-transform: uppercase; transition: 0.2s;
+            box-shadow: 0px 4px 0px #2e7d32;
+        }
+        button:hover { background: #45a049; }
+        button:active { transform: translateY(3px); box-shadow: 0px 1px 0px #2e7d32; }
+
+        /* Hotbar de Bloques (Inventario) */
+        #hotbar {
             position: absolute; bottom: 30px; left: 50%;
             transform: translateX(-50%);
             background: rgba(40, 40, 40, 0.9);
             padding: 8px; border: 4px solid #1e1e1e;
-            display: flex; gap: 8px; z-index: 10;
+            display: flex; gap: 8px;
+            z-index: 10;
         }
+        
         .slot {
             width: 50px; height: 50px; border: 4px solid #555;
             display: flex; align-items: center; justify-content: center;
-            cursor: pointer; background: #2c2c2c; transition: 0.1s;
+            cursor: pointer; background: #2c2c2c;
+            transition: transform 0.1s;
         }
-        .slot.selected { border-color: #ffca28; background: #444; transform: translateY(-5px); }
-        .block-preview { width: 30px; height: 30px; box-shadow: inset -4px -4px 0px rgba(0,0,0,0.3); }
+        
+        .slot:hover { border-color: #999; }
+        .slot.selected { 
+            border-color: #ffca28; 
+            background: #444; 
+            transform: translateY(-8px); 
+        }
+        
+        .block-preview { 
+            width: 34px; height: 34px; 
+            box-shadow: inset -4px -4px 0px rgba(0,0,0,0.3); 
+        }
 
+        /* Indicador de controles */
         #controles {
             position: absolute; top: 15px; right: 15px;
-            background: rgba(0,0,0,0.4); color: white;
+            color: white; background: rgba(0,0,0,0.5);
             padding: 10px; font-size: 12px; pointer-events: none;
+            border-radius: 4px;
         }
     </style>
 </head>
 <body>
 
-    <div id="ui">
-        <b>ID DEL REINO:</b>
-        <input type="text" id="realm-input" placeholder="nombre-del-mundo">
-        <b>TU NOMBRE:</b>
-        <input type="text" id="name-input" placeholder="Jugador">
-        <button onclick="unirse()">ENTRAR AL REINO</button>
+    <div id="pantalla-inicio">
+        <div class="panel-login">
+            <h1>MINECRAFT 2D RPG</h1>
+            
+            <div class="campo">
+                <label>NOMBRE DEL JUGADOR:</label>
+                <input type="text" id="name-input" placeholder="Steve" maxlength="12">
+            </div>
+
+            <div class="campo">
+                <label>CÓDIGO DEL REINO (SALA):</label>
+                <input type="text" id="realm-input" placeholder="mundo-secreto" value="principal">
+            </div>
+
+            <button onclick="conectarAlServidor()">ENTRAR AL REINO</button>
+        </div>
     </div>
 
     <div id="controles">
-        WASD: Moverse | Click Izq: Poner | Click Der: Quitar
+        <b>WASD</b> - Moverse<br>
+        <b>Click Izq</b> - Poner bloque<br>
+        <b>Click Der</b> - Quitar bloque
     </div>
 
-    <div id="creative-menu">
-        <div class="slot selected" onclick="selectBlock(1, this)"><div class="block-preview" style="background:#795548"></div></div>
-        <div class="slot" onclick="selectBlock(2, this)"><div class="block-preview" style="background:#4CAF50"></div></div>
-        <div class="slot" onclick="selectBlock(3, this)"><div class="block-preview" style="background:#9e9e9e"></div></div>
-        <div class="slot" onclick="selectBlock(4, this)"><div class="block-preview" style="background:#5D4037"></div></div>
-        <div class="slot" onclick="selectBlock(5, this)"><div class="block-preview" style="background:#2e7d32"></div></div>
-        <div class="slot" onclick="selectBlock(6, this)"><div class="block-preview" style="background:#ffd600"></div></div>
+    <div id="hotbar">
+        <div class="slot selected" onclick="cambiarBloque(1, this)"><div class="block-preview" style="background:#795548"></div></div>
+        <div class="slot" onclick="cambiarBloque(2, this)"><div class="block-preview" style="background:#4CAF50"></div></div>
+        <div class="slot" onclick="cambiarBloque(3, this)"><div class="block-preview" style="background:#9e9e9e"></div></div>
+        <div class="slot" onclick="cambiarBloque(4, this)"><div class="block-preview" style="background:#5D4037"></div></div>
+        <div class="slot" onclick="cambiarBloque(6, this)"><div class="block-preview" style="background:#ffd600"></div></div>
     </div>
 
     <canvas id="gameCanvas"></canvas>
+
     <script src="game.js"></script>
+
+    <script>
+        // Función para manejar la UI de selección de bloques
+        function cambiarBloque(id, elemento) {
+            // Actualizamos la variable global en game.js
+            window.selectedBlock = id;
+            
+            // Actualizamos la UI
+            document.querySelectorAll('.slot').forEach(s => s.classList.remove('selected'));
+            elemento.classList.add('selected');
+        }
+
+        // Función para iniciar la conexión
+        function conectarAlServidor() {
+            const nombre = document.getElementById('name-input').value.trim() || "Jugador";
+            const reino = document.getElementById('realm-input').value.trim() || "principal";
+            
+            // Llamamos a la función dentro de game.js
+            if (typeof window.unirse === 'function') {
+                window.unirse(reino, nombre);
+                // Ocultamos el menú
+                document.getElementById('pantalla-inicio').style.display = 'none';
+            } else {
+                alert("Error: game.js no se ha cargado correctamente.");
+            }
+        }
+    </script>
 </body>
 </html>

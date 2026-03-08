@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Juego visual · Escenario de ejecución</title>
+    <title>Editor visual masivo · 5000 nodos + búsqueda</title>
     <style>
         * {
             box-sizing: border-box;
@@ -11,7 +11,7 @@
             font-family: 'Segoe UI', Roboto, sans-serif;
         }
         body {
-            background: #2d3e4f;
+            background: #1e2a36;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -20,268 +20,173 @@
             padding: 16px;
         }
         .app-container {
-            background: #1e2a36;
-            border-radius: 24px;
+            background: #14222e;
+            border-radius: 32px;
             padding: 20px;
-            box-shadow: 0 20px 30px rgba(0,0,0,0.5);
-            width: 1100px;
+            box-shadow: 0 20px 30px rgba(0,0,0,0.7);
+            width: 1300px;
             max-width: 100%;
         }
         .toolbar {
-            background: #2c3e50;
+            background: #1f3342;
             padding: 12px 20px;
-            border-radius: 40px;
+            border-radius: 50px;
             display: flex;
             flex-wrap: wrap;
-            gap: 12px;
+            gap: 10px;
             margin-bottom: 20px;
-            box-shadow: inset 0 2px 5px #1a242f, 0 4px 8px #0f1a22;
+            box-shadow: inset 0 2px 6px #0a1a26, 0 6px 12px black;
         }
-        .toolbar button {
-            background: #4a6fa5;
+        .toolbar button, .toolbar input {
+            background: #31658c;
             border: none;
             color: white;
-            padding: 10px 22px;
-            border-radius: 30px;
-            font-size: 1rem;
+            padding: 10px 18px;
+            border-radius: 40px;
+            font-size: 0.95rem;
             font-weight: bold;
             cursor: pointer;
-            box-shadow: 0 5px 0 #2c3e50, 0 6px 12px black;
-            transition: 0.07s ease;
-            border-bottom: 2px solid #1b2b3a;
-            letter-spacing: 0.5px;
+            box-shadow: 0 4px 0 #1b3f57;
+            transition: 0.07s;
+            border-bottom: 2px solid #0f2c3a;
         }
         .toolbar button:hover {
-            background: #5f7fb0;
+            background: #3f7aab;
             transform: translateY(-2px);
-            box-shadow: 0 7px 0 #2c3e50, 0 10px 18px black;
+            box-shadow: 0 6px 0 #1b3f57;
         }
         .toolbar button:active {
-            transform: translateY(5px);
-            box-shadow: 0 2px 0 #2c3e50, 0 6px 12px black;
+            transform: translateY(4px);
+            box-shadow: 0 1px 0 #1b3f57;
+        }
+        .toolbar input {
+            background: #2b4d66;
+            box-shadow: inset 0 2px 5px #0e1f2b;
+            border: 2px solid #5f8db0;
+            cursor: text;
+            width: 250px;
+            color: #e0f0ff;
+        }
+        .toolbar input::placeholder {
+            color: #9bbad0;
         }
         .workspace-wrapper {
             position: relative;
-            background: #3a4e62;
-            border-radius: 28px;
-            padding: 15px;
-            box-shadow: inset 0 0 0 2px #1d2a35, 0 10px 20px rgba(0,0,0,0.6);
+            background: #263e50;
+            border-radius: 30px;
+            padding: 10px;
+            box-shadow: inset 0 0 0 2px #1d2e3c, 0 10px 20px rgba(0,0,0,0.6);
         }
         #workspace {
             position: relative;
             width: 100%;
-            height: 540px;
-            background: #e2eaf1;
+            height: 600px;
+            background: #cedbe8;
             background-image: 
-                linear-gradient(rgba(120, 140, 160, 0.2) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(120, 140, 160, 0.2) 1px, transparent 1px);
-            background-size: 25px 25px;
-            border-radius: 20px;
+                linear-gradient(rgba(90, 110, 130, 0.3) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(90, 110, 130, 0.3) 1px, transparent 1px);
+            background-size: 30px 30px;
+            border-radius: 24px;
             overflow: hidden;
             cursor: default;
-            box-shadow: inset 0 0 30px #1b2b38;
         }
-        #connections-canvas {
+        #canvas-nodes, #canvas-connections {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
             pointer-events: none;
+        }
+        #canvas-nodes {
+            pointer-events: none;  /* las interacciones se manejan por coordenadas en el workspace */
+            z-index: 5;
+        }
+        #canvas-connections {
+            pointer-events: none;
             z-index: 10;
         }
-        #nodes-container {
-            position: relative;
+        /* overlay invisible para capturar eventos */
+        #event-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
-            z-index: 20;
-        }
-        .node {
-            position: absolute;
-            width: 160px;
-            min-height: 90px;
-            background: #f4f9ff;
-            border-radius: 16px;
-            border: 3px solid #1f3a4b;
-            box-shadow: 0 8px 0 #0f2838, 0 12px 20px rgba(0,0,0,0.3);
-            display: flex;
-            flex-direction: column;
-            transition: box-shadow 0.1s;
-            cursor: default;
-            color: #0a1e2b;
-        }
-        .node:active {
-            box-shadow: 0 4px 0 #0f2838, 0 8px 15px rgba(0,0,0,0.3);
-        }
-        .node-header {
-            background: #2b4b65;
-            padding: 8px 12px;
-            border-radius: 12px 12px 0 0;
-            font-weight: bold;
-            color: white;
-            text-align: center;
-            cursor: grab;
-            border-bottom: 2px solid #0e2a3a;
-            letter-spacing: 0.8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .node-header:active {
-            cursor: grabbing;
-        }
-        .node-content {
-            padding: 12px 10px;
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            background: #eaf0f8;
-            border-radius: 0 0 16px 16px;
-        }
-        .node select {
-            background: #1f3e52;
-            color: white;
-            border: 2px solid #0e2a38;
-            border-radius: 30px;
-            padding: 5px 8px;
-            font-weight: bold;
-            outline: none;
-            cursor: pointer;
-        }
-        .node .tipo-badge {
-            background: #173342;
-            color: white;
-            border-radius: 30px;
-            padding: 4px 12px;
-            font-size: 0.8rem;
-            font-weight: bold;
-            display: inline-block;
-            text-align: center;
-        }
-        .port {
-            position: absolute;
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background: #d64550;
-            border: 3px solid #631e26;
-            top: 50%;
-            transform: translateY(-50%);
-            z-index: 30;
+            z-index: 100;
             cursor: crosshair;
-            box-shadow: 0 2px 6px black;
-            transition: 0.1s;
-        }
-        .port.left {
-            left: -12px;
-            background: #4db8b8;
-            border-color: #1d6b6b;
-        }
-        .port.right {
-            right: -12px;
-            background: #f0a55a;
-            border-color: #a5521a;
-        }
-        .port:hover {
-            transform: translateY(-50%) scale(1.2);
-            filter: brightness(1.2);
         }
         .log-panel {
-            background: #17212b;
+            background: #10212b;
             margin-top: 20px;
             border-radius: 30px;
             padding: 12px 22px;
-            color: #c9e9ff;
+            color: #b3dcff;
             font-family: monospace;
-            font-size: 1rem;
-            border: 2px solid #0d1a24;
-            box-shadow: inset 0 0 10px #0b141c;
+            border: 2px solid #173545;
             max-height: 120px;
             overflow-y: auto;
+            box-shadow: inset 0 0 10px #07131c;
         }
         .log-panel div {
             padding: 4px 0;
-            border-bottom: 1px dashed #3a5568;
+            border-bottom: 1px solid #2f516b;
         }
-        .log-panel .log-title {
+        .log-title {
             font-weight: bold;
-            color: #ffd966;
+            color: #ffc857;
             border: none;
             font-size: 1.1rem;
         }
-        .footer-buttons {
-            display: flex;
-            gap: 15px;
-            margin-top: 15px;
-            justify-content: flex-end;
+        .stats {
+            color: #aad0f5;
+            background: #0a1f2c;
+            border-radius: 20px;
+            padding: 4px 15px;
+            margin-left: auto;
+            font-weight: bold;
         }
-
-        /* --- MODAL DEL ESCENARIO --- */
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.7);
+            background: rgba(0,0,0,0.8);
             display: flex;
             align-items: center;
             justify-content: center;
             z-index: 1000;
-            backdrop-filter: blur(4px);
+            backdrop-filter: blur(5px);
         }
         .modal-content {
-            background: #1f3a4b;
-            border-radius: 40px;
-            padding: 25px 30px;
+            background: #1e3b4f;
+            border-radius: 60px;
+            padding: 30px;
+            border: 5px solid #4f8bbf;
             box-shadow: 0 20px 30px black;
-            border: 4px solid #4a6fa5;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 20px;
         }
         .modal-content h2 {
             color: white;
-            margin: 0;
-            font-size: 1.8rem;
-            text-shadow: 2px 2px 0 #0a1e2b;
+            margin-top: 0;
         }
         #escenario-canvas {
-            background: #b3cfe3;
-            border-radius: 30px;
-            box-shadow: inset 0 0 0 4px #2b4b65, 0 10px 20px black;
+            background: #aac7df;
+            border-radius: 40px;
+            box-shadow: inset 0 0 0 5px #2a5777;
             width: 450px;
             height: 450px;
-            display: block;
-        }
-        .modal-botones {
-            display: flex;
-            gap: 30px;
         }
         .modal-botones button {
-            background: #e24b4b;
+            background: #d65f5f;
             border: none;
             color: white;
-            font-weight: bold;
-            font-size: 1.3rem;
-            padding: 10px 35px;
-            border-radius: 50px;
+            font-size: 1.5rem;
+            padding: 10px 40px;
+            border-radius: 60px;
             cursor: pointer;
-            box-shadow: 0 6px 0 #6b1f1f, 0 8px 16px black;
-            transition: 0.07s;
-            border-bottom: 3px solid #4d1717;
+            margin-top: 20px;
+            font-weight: bold;
+            box-shadow: 0 6px 0 #6b2525;
         }
-        .modal-botones button:hover {
-            background: #f25f5f;
-            transform: translateY(-3px);
-            box-shadow: 0 9px 0 #6b1f1f, 0 12px 22px black;
-        }
-        .modal-botones button:active {
-            transform: translateY(5px);
-            box-shadow: 0 2px 0 #6b1f1f;
-        }
-        .hidden {
-            display: none;
-        }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
@@ -290,24 +195,28 @@
         <button id="btnAddInicio">➕ Inicio</button>
         <button id="btnAddMover">🔄 Mover</button>
         <button id="btnAddFin">🏁 Fin</button>
+        <button id="btnAdd5000">⚡ Añadir 5000 nodos</button>
+        <input type="text" id="searchInput" placeholder="🔍 Buscar (id, tipo, dirección...)" />
         <button id="btnEjecutar">▶️ Ejecutar</button>
         <button id="btnReiniciar">♻️ Reiniciar</button>
+        <span class="stats" id="nodeCount">Nodos: 0</span>
     </div>
 
     <div class="workspace-wrapper">
         <div id="workspace">
-            <canvas id="connections-canvas" width="1000" height="600"></canvas>
-            <div id="nodes-container"></div>
+            <canvas id="canvas-nodes" width="1200" height="600"></canvas>
+            <canvas id="canvas-connections" width="1200" height="600"></canvas>
+            <div id="event-overlay"></div>
         </div>
     </div>
 
     <div class="log-panel" id="logPanel">
-        <div class="log-title">📋 Consola de ejecución</div>
-        <div id="logContent">-- Listo para programar --</div>
+        <div class="log-title">📋 Consola</div>
+        <div id="logContent">-- Editor masivo listo --</div>
     </div>
 </div>
 
-<!-- MODAL ESCENARIO (oculto inicialmente) -->
+<!-- Modal escenario (igual que antes) -->
 <div id="modalEscenario" class="modal-overlay hidden">
     <div class="modal-content">
         <h2>🎮 ESCENARIO</h2>
@@ -320,72 +229,189 @@
 
 <script>
 (function() {
-    // --- Estado de la aplicación ---
-    let nodes = [];               // { id, type, x, y, direction? }
-    let connections = [];         // { fromId, toId }  (único origen y destino)
+    // --- Estado ---
+    let nodes = [];
+    let connections = [];         // { fromId, toId }
     let nextId = 1;
+    let searchTerm = '';
 
-    // Referencias DOM
+    // Referencias a canvas
     const workspace = document.getElementById('workspace');
-    const nodesContainer = document.getElementById('nodes-container');
-    const canvas = document.getElementById('connections-canvas');
-    const ctx = canvas.getContext('2d');
+    const canvasNodes = document.getElementById('canvas-nodes');
+    const canvasConn = document.getElementById('canvas-connections');
+    const ctxNodes = canvasNodes.getContext('2d');
+    const ctxConn = canvasConn.getContext('2d');
+    const overlay = document.getElementById('event-overlay');
     const logContent = document.getElementById('logContent');
+    const nodeCountSpan = document.getElementById('nodeCount');
 
-    // Variables para arrastrar nodos
-    let draggingNode = null;
+    // Variables de interacción
+    let draggingNode = null;            // id del nodo arrastrado
     let dragOffsetX = 0, dragOffsetY = 0;
-
-    // Variables para conexión temporal
     let draggingConnection = false;
     let fromNodeId = null;
     let tempEndPos = { x: 0, y: 0 };
+    let isDragging = false;              // para distinguir click de arrastre
 
-    // --- Referencias al modal y escenario ---
+    // Escenario
     const modal = document.getElementById('modalEscenario');
     const escenarioCanvas = document.getElementById('escenario-canvas');
     const escenarioCtx = escenarioCanvas.getContext('2d');
     const btnCerrar = document.getElementById('btnCerrarEscenario');
-
-    // Variables para la animación del escenario
     let animacionActiva = false;
     let frameId = null;
-    let secuenciaMovimientos = [];      // array de direcciones (strings)
+    let secuenciaMovimientos = [];
     let pasoActual = 0;
-    let posX = 2, posY = 2;             // inicio en centro de grid 5x5 (0-4)
-    const TAM_CELDA = 90;                // 450/5 = 90
+    let posX = 2, posY = 2;
+    const TAM_CELDA = 90;
 
-    // --- Funciones de utilidad ---
-    function resizeCanvas() {
+    // --- Funciones de dibujo (nodos y conexiones) ---
+    function resizeCanvases() {
         const rect = workspace.getBoundingClientRect();
-        canvas.width = rect.width;
-        canvas.height = rect.height;
+        canvasNodes.width = rect.width;
+        canvasNodes.height = rect.height;
+        canvasConn.width = rect.width;
+        canvasConn.height = rect.height;
+        drawAll();
+    }
+    window.addEventListener('resize', resizeCanvases);
+
+    function drawAll() {
+        drawNodes();
         drawConnections();
     }
-    window.addEventListener('resize', resizeCanvas);
 
-    // --- Funciones de dibujo de conexiones (igual que antes) ---
+    function drawNodes() {
+        ctxNodes.clearRect(0, 0, canvasNodes.width, canvasNodes.height);
+        const rect = canvasNodes.getBoundingClientRect();
+        const scaleX = canvasNodes.width / rect.width;   // normalmente 1 si coincide
+        const scaleY = canvasNodes.height / rect.height;
+
+        // Ordenar para que los nodos seleccionados (por búsqueda) se dibujen encima
+        const sorted = [...nodes].sort((a,b) => {
+            const aMatch = matchesSearch(a) ? 1 : 0;
+            const bMatch = matchesSearch(b) ? 1 : 0;
+            return aMatch - bMatch; // los que matchean van al final (encima)
+        });
+
+        for (let node of sorted) {
+            const x = node.x;
+            const y = node.y;
+            const w = 160;
+            const h = 90;
+
+            // Sombra
+            ctxNodes.shadowColor = '#00000060';
+            ctxNodes.shadowBlur = 10;
+            ctxNodes.shadowOffsetY = 4;
+            // Fondo del nodo
+            ctxNodes.fillStyle = '#f4f9ff';
+            ctxNodes.beginPath();
+            ctxNodes.roundRect(x, y, w, h, 16);
+            ctxNodes.fill();
+            // Borde (resaltar si coincide búsqueda)
+            ctxNodes.shadowBlur = 0;
+            ctxNodes.lineWidth = matchesSearch(node) ? 6 : 3;
+            ctxNodes.strokeStyle = matchesSearch(node) ? '#f5c542' : '#1f3a4b';
+            ctxNodes.stroke();
+
+            // Cabecera
+            ctxNodes.fillStyle = '#2b4b65';
+            ctxNodes.beginPath();
+            ctxNodes.roundRect(x, y, w, 30, 12, 12, 0, 0); // esquinas superiores
+            ctxNodes.fill();
+
+            // Texto cabecera
+            ctxNodes.font = 'bold 14px "Segoe UI"';
+            ctxNodes.fillStyle = 'white';
+            ctxNodes.textAlign = 'left';
+            let headerText = node.type === 'inicio' ? '🚀 INICIO' : (node.type === 'fin' ? '🏁 FIN' : '⚙️ MOVER');
+            ctxNodes.fillText(headerText, x + 12, y + 20);
+
+            // Badge tipo
+            ctxNodes.font = 'bold 10px monospace';
+            ctxNodes.fillStyle = '#173342';
+            ctxNodes.textAlign = 'right';
+            ctxNodes.fillText(node.type.toUpperCase(), x + w - 12, y + 20);
+
+            // Contenido
+            ctxNodes.font = '12px "Segoe UI"';
+            ctxNodes.fillStyle = '#0a1e2b';
+            if (node.type === 'move') {
+                ctxNodes.fillStyle = '#1f3e52';
+                ctxNodes.fillText(`Dirección: ${node.direction || 'derecha'}`, x + 15, y + 55);
+            } else {
+                ctxNodes.fillStyle = '#346792';
+                ctxNodes.fillText(node.type === 'inicio' ? 'Entrada' : 'Final', x + 40, y + 55);
+            }
+
+            // Puerto izquierdo (entrada)
+            if (node.type !== 'inicio') {
+                ctxNodes.fillStyle = '#4db8b8';
+                ctxNodes.beginPath();
+                ctxNodes.arc(x - 6, y + 45, 10, 0, 2*Math.PI);
+                ctxNodes.fill();
+                ctxNodes.strokeStyle = '#1d6b6b';
+                ctxNodes.lineWidth = 3;
+                ctxNodes.stroke();
+            }
+            // Puerto derecho (salida)
+            if (node.type !== 'fin') {
+                ctxNodes.fillStyle = '#f0a55a';
+                ctxNodes.beginPath();
+                ctxNodes.arc(x + w + 6, y + 45, 10, 0, 2*Math.PI);
+                ctxNodes.fill();
+                ctxNodes.strokeStyle = '#a5521a';
+                ctxNodes.lineWidth = 3;
+                ctxNodes.stroke();
+            }
+
+            // Pequeño ID para depuración/búsqueda
+            ctxNodes.font = '9px monospace';
+            ctxNodes.fillStyle = '#3d5e7a';
+            ctxNodes.fillText(`#${node.id}`, x + 120, y + 78);
+        }
+        ctxNodes.shadowBlur = 0;
+        nodeCountSpan.textContent = `Nodos: ${nodes.length}`;
+    }
+
+    // helper para roundRect
+    CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r, tl, tr, bl, br) {
+        if (typeof r === 'number') {
+            tl = tr = bl = br = r;
+        }
+        this.beginPath();
+        this.moveTo(x + tl, y);
+        this.lineTo(x + w - tr, y);
+        this.quadraticCurveTo(x + w, y, x + w, y + tr);
+        this.lineTo(x + w, y + h - br);
+        this.quadraticCurveTo(x + w, y + h, x + w - br, y + h);
+        this.lineTo(x + bl, y + h);
+        this.quadraticCurveTo(x, y + h, x, y + h - bl);
+        this.lineTo(x, y + tl);
+        this.quadraticCurveTo(x, y, x + tl, y);
+        this.closePath();
+        return this;
+    };
+
     function drawConnections() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        if (!nodes.length) return;
-
+        ctxConn.clearRect(0, 0, canvasConn.width, canvasConn.height);
         connections.forEach(conn => {
             const fromPos = getPortPos(conn.fromId, 'output');
             const toPos = getPortPos(conn.toId, 'input');
             if (fromPos && toPos) {
-                drawLine(fromPos, toPos, '#1f6390', 4);
+                drawLine(ctxConn, fromPos, toPos, '#1f6390', 4);
             }
         });
-
         if (draggingConnection && fromNodeId) {
             const startPos = getPortPos(fromNodeId, 'output');
             if (startPos) {
-                drawLine(startPos, tempEndPos, '#f0a55a', 3, true);
+                drawLine(ctxConn, startPos, tempEndPos, '#f0a55a', 3, true);
             }
         }
     }
 
-    function drawLine(from, to, color, width, dashed = false) {
+    function drawLine(ctx, from, to, color, width, dashed = false) {
         ctx.beginPath();
         ctx.moveTo(from.x, from.y);
         ctx.lineTo(to.x, to.y);
@@ -408,277 +434,249 @@
     }
 
     function getPortPos(nodeId, portType) {
-        const nodeDiv = document.querySelector(`.node[data-id="${nodeId}"]`);
-        if (!nodeDiv) return null;
-        const port = nodeDiv.querySelector(`.port.${portType === 'input' ? 'left' : 'right'}`);
-        if (!port) return null;
-
-        const canvasRect = canvas.getBoundingClientRect();
-        const portRect = port.getBoundingClientRect();
+        const node = nodes.find(n => n.id == nodeId);
+        if (!node) return null;
+        const x = node.x;
+        const y = node.y;
+        const w = 160;
+        const offsetX = portType === 'input' ? -6 : w + 6;
         return {
-            x: portRect.left + portRect.width/2 - canvasRect.left,
-            y: portRect.top + portRect.height/2 - canvasRect.top
+            x: x + offsetX,
+            y: y + 45
         };
     }
 
-    // --- Gestión de conexiones ---
-    function removeOutgoingFrom(nodeId) {
-        connections = connections.filter(c => c.fromId !== nodeId);
-    }
-    function removeIncomingTo(nodeId) {
-        connections = connections.filter(c => c.toId !== nodeId);
-    }
-
-    function addConnection(fromId, toId) {
-        if (fromId === toId) return false;
-
-        const fromNode = nodes.find(n => n.id == fromId);
-        const toNode = nodes.find(n => n.id == toId);
-        if (!fromNode || !toNode) return false;
-        if (fromNode.type === 'fin' || toNode.type === 'inicio') return false;
-
-        removeOutgoingFrom(fromId);
-        removeIncomingTo(toId);
-
-        connections.push({ fromId, toId });
-        drawConnections();
-        return true;
-    }
-
-    // --- Arrastre de nodos ---
-    function startDragNode(nodeId, clientX, clientY) {
-        const node = nodes.find(n => n.id == nodeId);
-        if (!node) return;
-        const nodeDiv = document.querySelector(`.node[data-id="${nodeId}"]`);
-        if (!nodeDiv) return;
-        const rect = nodeDiv.getBoundingClientRect();
-        const workspaceRect = workspace.getBoundingClientRect();
-
-        draggingNode = nodeId;
-        dragOffsetX = clientX - rect.left;
-        dragOffsetY = clientY - rect.top;
-    }
-
-    function onDragNode(clientX, clientY) {
-        if (!draggingNode) return;
-        const workspaceRect = workspace.getBoundingClientRect();
-        let newX = clientX - workspaceRect.left - dragOffsetX;
-        let newY = clientY - workspaceRect.top - dragOffsetY;
-
-        newX = Math.max(0, Math.min(workspaceRect.width - 160, newX));
-        newY = Math.max(0, Math.min(workspaceRect.height - 100, newY));
-
-        const node = nodes.find(n => n.id == draggingNode);
-        if (node) {
-            node.x = newX;
-            node.y = newY;
-        }
-        syncNodePositions();
-    }
-
-    function stopDragNode() {
-        draggingNode = null;
-    }
-
-    function renderNodes() {
-        nodesContainer.innerHTML = '';
-        nodes.forEach(node => {
-            const nodeDiv = document.createElement('div');
-            nodeDiv.className = 'node';
-            nodeDiv.setAttribute('data-id', node.id);
-            nodeDiv.style.left = node.x + 'px';
-            nodeDiv.style.top = node.y + 'px';
-
-            const header = document.createElement('div');
-            header.className = 'node-header';
-            header.textContent = node.type === 'inicio' ? '🚀 INICIO' : (node.type === 'fin' ? '🏁 FIN' : '⚙️ MOVER');
-            const badge = document.createElement('span');
-            badge.className = 'tipo-badge';
-            badge.textContent = node.type === 'inicio' ? 'INICIO' : (node.type === 'fin' ? 'FIN' : 'MOVER');
-            header.appendChild(badge);
-            nodeDiv.appendChild(header);
-
-            const content = document.createElement('div');
-            content.className = 'node-content';
-            if (node.type === 'move') {
-                const select = document.createElement('select');
-                select.setAttribute('data-id', node.id);
-                select.setAttribute('data-type', 'direction');
-                const direcciones = ['arriba', 'abajo', 'izquierda', 'derecha'];
-                direcciones.forEach(dir => {
-                    const option = document.createElement('option');
-                    option.value = dir;
-                    option.textContent = dir.charAt(0).toUpperCase() + dir.slice(1);
-                    if (node.direction === dir) option.selected = true;
-                    select.appendChild(option);
-                });
-                select.addEventListener('change', (e) => {
-                    const newDir = e.target.value;
-                    const targetNode = nodes.find(n => n.id == e.target.getAttribute('data-id'));
-                    if (targetNode) targetNode.direction = newDir;
-                });
-                content.appendChild(select);
-            } else {
-                const hint = document.createElement('div');
-                hint.style.textAlign = 'center';
-                hint.style.padding = '8px';
-                hint.style.background = '#cbdbe9';
-                hint.style.borderRadius = '30px';
-                hint.style.fontWeight = '500';
-                hint.textContent = node.type === 'inicio' ? 'Punto de entrada' : 'Punto final';
-                content.appendChild(hint);
-            }
-            nodeDiv.appendChild(content);
-
-            if (node.type !== 'inicio') {
-                const leftPort = document.createElement('div');
-                leftPort.className = 'port left';
-                leftPort.setAttribute('data-node-id', node.id);
-                leftPort.setAttribute('data-port-type', 'input');
-                nodeDiv.appendChild(leftPort);
-            }
-            if (node.type !== 'fin') {
-                const rightPort = document.createElement('div');
-                rightPort.className = 'port right';
-                rightPort.setAttribute('data-node-id', node.id);
-                rightPort.setAttribute('data-port-type', 'output');
-                nodeDiv.appendChild(rightPort);
-            }
-
-            nodesContainer.appendChild(nodeDiv);
-        });
-        drawConnections();
-    }
-
-    function syncNodePositions() {
-        nodes.forEach(node => {
-            const nodeDiv = document.querySelector(`.node[data-id="${node.id}"]`);
-            if (nodeDiv) {
-                nodeDiv.style.left = node.x + 'px';
-                nodeDiv.style.top = node.y + 'px';
-            }
-        });
-        drawConnections();
-    }
-
-    // --- Eventos de ratón ---
+    // --- Interacción: detección de elementos bajo el mouse ---
     function handleMouseDown(e) {
-        const target = e.target;
+        const rect = workspace.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
 
-        if (target.classList.contains('port') && target.classList.contains('right')) {
+        // Detectar puertos de salida primero
+        const outputPortNode = findNodeWithOutputAt(mouseX, mouseY);
+        if (outputPortNode) {
             e.preventDefault();
-            e.stopPropagation();
-            const nodeId = target.getAttribute('data-node-id');
-            if (!nodeId) return;
-            fromNodeId = nodeId;
+            fromNodeId = outputPortNode.id;
             draggingConnection = true;
-            const canvasRect = canvas.getBoundingClientRect();
-            tempEndPos.x = e.clientX - canvasRect.left;
-            tempEndPos.y = e.clientY - canvasRect.top;
-            drawConnections();
+            tempEndPos.x = mouseX;
+            tempEndPos.y = mouseY;
+            drawAll();
             return;
         }
 
-        if (target.classList.contains('node-header') || (target.parentElement && target.parentElement.classList.contains('node-header'))) {
+        // Detectar cabecera de nodo (para arrastrar)
+        const headerNode = findNodeHeaderAt(mouseX, mouseY);
+        if (headerNode) {
             e.preventDefault();
-            const nodeDiv = target.closest('.node');
-            if (!nodeDiv) return;
-            const nodeId = nodeDiv.getAttribute('data-id');
-            if (!nodeId) return;
-            startDragNode(nodeId, e.clientX, e.clientY);
+            draggingNode = headerNode.id;
+            dragOffsetX = mouseX - headerNode.x;
+            dragOffsetY = mouseY - headerNode.y;
+            isDragging = false; // se convertirá en true si hay movimiento
+            return;
         }
     }
 
     function handleMouseMove(e) {
+        const rect = workspace.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
         if (draggingConnection) {
-            const canvasRect = canvas.getBoundingClientRect();
-            tempEndPos.x = e.clientX - canvasRect.left;
-            tempEndPos.y = e.clientY - canvasRect.top;
-            drawConnections();
+            tempEndPos.x = mouseX;
+            tempEndPos.y = mouseY;
+            drawAll();
         }
+
         if (draggingNode) {
-            onDragNode(e.clientX, e.clientY);
+            isDragging = true;
+            const node = nodes.find(n => n.id == draggingNode);
+            if (node) {
+                let newX = mouseX - dragOffsetX;
+                let newY = mouseY - dragOffsetY;
+                // límites
+                newX = Math.max(0, Math.min(canvasNodes.width - 160, newX));
+                newY = Math.max(0, Math.min(canvasNodes.height - 90, newY));
+                node.x = newX;
+                node.y = newY;
+                drawAll();
+            }
         }
     }
 
     function handleMouseUp(e) {
+        const rect = workspace.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
         if (draggingConnection) {
-            const target = e.target;
-            if (target.classList.contains('port') && target.classList.contains('left')) {
-                const toNodeId = target.getAttribute('data-node-id');
-                if (toNodeId && fromNodeId) {
-                    addConnection(fromNodeId, toNodeId);
-                }
+            const inputPortNode = findNodeWithInputAt(mouseX, mouseY);
+            if (inputPortNode && fromNodeId) {
+                addConnection(fromNodeId, inputPortNode.id);
             }
             draggingConnection = false;
             fromNodeId = null;
-            drawConnections();
+            drawAll();
         }
+
         if (draggingNode) {
-            stopDragNode();
+            if (!isDragging) {
+                // Fue un clic sin arrastre: podríamos seleccionar, pero no necesario
+            }
+            draggingNode = null;
+            isDragging = false;
         }
     }
+
+    // Funciones de detección de área
+    function findNodeWithOutputAt(mx, my) {
+        // busca nodo que tenga puerto derecho (output) y que no sea fin
+        for (let node of nodes) {
+            if (node.type === 'fin') continue;
+            const x = node.x + 166;  // posición del puerto derecho
+            const y = node.y + 45;
+            const dist = Math.hypot(mx - x, my - y);
+            if (dist < 15) return node;
+        }
+        return null;
+    }
+
+    function findNodeWithInputAt(mx, my) {
+        for (let node of nodes) {
+            if (node.type === 'inicio') continue;
+            const x = node.x - 6;
+            const y = node.y + 45;
+            const dist = Math.hypot(mx - x, my - y);
+            if (dist < 15) return node;
+        }
+        return null;
+    }
+
+    function findNodeHeaderAt(mx, my) {
+        for (let node of nodes) {
+            if (mx >= node.x && mx <= node.x + 160 && my >= node.y && my <= node.y + 30) {
+                return node;
+            }
+        }
+        return null;
+    }
+
+    // --- Conexiones ---
+    function addConnection(fromId, toId) {
+        if (fromId === toId) return;
+        const fromNode = nodes.find(n => n.id == fromId);
+        const toNode = nodes.find(n => n.id == toId);
+        if (!fromNode || !toNode) return;
+        if (fromNode.type === 'fin' || toNode.type === 'inicio') return;
+
+        // eliminar conexiones previas
+        connections = connections.filter(c => c.fromId !== fromId && c.toId !== toId);
+        connections.push({ fromId, toId });
+        drawAll();
+    }
+
+    // --- Búsqueda ---
+    function matchesSearch(node) {
+        if (!searchTerm) return false;
+        const term = searchTerm.toLowerCase();
+        return node.id.toString().includes(term) ||
+               node.type.toLowerCase().includes(term) ||
+               (node.direction && node.direction.toLowerCase().includes(term));
+    }
+
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+        searchTerm = e.target.value;
+        drawAll();
+    });
 
     // --- Añadir nodos ---
     function addNode(type) {
-        const baseX = 50 + (nodes.length * 30) % 300;
-        const baseY = 50 + (nodes.length * 20) % 300;
         const newNode = {
             id: nextId++,
             type: type,
-            x: baseX,
-            y: baseY,
+            x: 50 + Math.random() * 800,
+            y: 50 + Math.random() * 400,
         };
-        if (type === 'move') {
-            newNode.direction = 'derecha';
-        }
+        if (type === 'move') newNode.direction = ['arriba','abajo','izquierda','derecha'][Math.floor(Math.random()*4)];
         nodes.push(newNode);
-        renderNodes();
+        drawAll();
     }
 
-    // --- Función para obtener la secuencia de direcciones desde el grafo ---
+    function add5000Nodes() {
+        for (let i = 0; i < 5000; i++) {
+            const type = ['inicio','move','fin'][Math.floor(Math.random()*3)];
+            const newNode = {
+                id: nextId++,
+                type: type,
+                x: 20 + Math.random() * (canvasNodes.width - 180),
+                y: 20 + Math.random() * (canvasNodes.height - 110),
+            };
+            if (type === 'move') newNode.direction = ['arriba','abajo','izquierda','derecha'][Math.floor(Math.random()*4)];
+            nodes.push(newNode);
+        }
+        drawAll();
+        logContent.innerHTML = `<div>✅ 5000 nodos añadidos (total: ${nodes.length})</div>`;
+    }
+
+    // --- Ejecutar / Escenario ---
     function obtenerSecuenciaMovimientos() {
         const inicio = nodes.find(n => n.type === 'inicio');
-        if (!inicio) return { exito: false, mensaje: 'No hay nodo Inicio', movimientos: [] };
+        if (!inicio) return { exito: false, mensaje: 'No hay Inicio', movimientos: [] };
 
         let visitados = new Set();
         let current = inicio;
         let movimientos = [];
         let steps = 0;
-        const maxSteps = 50;
-
-        while (current && steps < maxSteps) {
-            if (visitados.has(current.id)) {
-                return { exito: false, mensaje: 'Ciclo detectado', movimientos };
-            }
+        while (current && steps < 200) {
+            if (visitados.has(current.id)) return { exito: false, mensaje: 'Ciclo', movimientos };
             visitados.add(current.id);
-
-            if (current.type === 'move') {
-                movimientos.push(current.direction || 'derecha');
-            } else if (current.type === 'fin') {
-                return { exito: true, mensaje: 'OK', movimientos };
-            }
+            if (current.type === 'move') movimientos.push(current.direction || 'derecha');
+            if (current.type === 'fin') return { exito: true, mensaje: 'OK', movimientos };
 
             const outConn = connections.find(c => c.fromId === current.id);
-            if (!outConn) {
-                // Si no es fin y no hay salida, terminamos (puede que no haya fin)
-                return { exito: current.type === 'fin', mensaje: current.type === 'fin' ? 'OK' : 'Flujo truncado', movimientos };
-            }
+            if (!outConn) return { exito: current.type === 'fin', mensaje: 'Sin salida', movimientos };
             const next = nodes.find(n => n.id == outConn.toId);
-            if (!next) {
-                return { exito: false, mensaje: 'Conexión rota', movimientos };
-            }
+            if (!next) return { exito: false, mensaje: 'Conexión rota', movimientos };
             current = next;
             steps++;
         }
-        return { exito: false, mensaje: 'Demasiados pasos', movimientos };
+        return { exito: false, mensaje: 'Límite', movimientos };
     }
 
-    // --- DIBUJAR ESCENARIO (grid y personaje) ---
+    function ejecutar() {
+        const { exito, mensaje, movimientos } = obtenerSecuenciaMovimientos();
+        logContent.innerHTML = `<div>${exito ? '✅' : '❌'} ${mensaje} (${movimientos.length} movs)</div>`;
+        modal.classList.remove('hidden');
+        iniciarAnimacion(movimientos);
+    }
+
+    function iniciarAnimacion(movimientos) {
+        if (animacionActiva) cancelAnimationFrame(frameId);
+        secuenciaMovimientos = movimientos;
+        pasoActual = 0;
+        posX = 2; posY = 2;
+
+        function paso() {
+            if (pasoActual < secuenciaMovimientos.length) {
+                const dir = secuenciaMovimientos[pasoActual];
+                if (dir === 'arriba' && posY > 0) posY--;
+                else if (dir === 'abajo' && posY < 4) posY++;
+                else if (dir === 'izquierda' && posX > 0) posX--;
+                else if (dir === 'derecha' && posX < 4) posX++;
+                pasoActual++;
+                dibujarEscenario();
+                frameId = requestAnimationFrame(paso);
+            } else {
+                animacionActiva = false;
+                frameId = null;
+            }
+        }
+        animacionActiva = true;
+        dibujarEscenario();
+        frameId = requestAnimationFrame(paso);
+    }
+
     function dibujarEscenario() {
         escenarioCtx.clearRect(0, 0, 450, 450);
-
-        // Dibujar grid 5x5
         escenarioCtx.strokeStyle = '#2b4b65';
         escenarioCtx.lineWidth = 3;
         for (let i = 0; i <= 5; i++) {
@@ -692,132 +690,57 @@
             escenarioCtx.lineTo(450, p);
             escenarioCtx.stroke();
         }
-
-        // Dibujar personaje (círculo rojo)
-        const centroX = posX * TAM_CELDA + TAM_CELDA/2;
-        const centroY = posY * TAM_CELDA + TAM_CELDA/2;
+        const cx = posX * TAM_CELDA + TAM_CELDA/2;
+        const cy = posY * TAM_CELDA + TAM_CELDA/2;
         escenarioCtx.beginPath();
-        escenarioCtx.arc(centroX, centroY, TAM_CELDA*0.3, 0, 2*Math.PI);
+        escenarioCtx.arc(cx, cy, 27, 0, 2*Math.PI);
         escenarioCtx.fillStyle = '#d64550';
         escenarioCtx.shadowColor = '#4a1f1f';
-        escenarioCtx.shadowBlur = 10;
+        escenarioCtx.shadowBlur = 12;
         escenarioCtx.fill();
         escenarioCtx.shadowBlur = 0;
         escenarioCtx.strokeStyle = '#ffdd99';
         escenarioCtx.lineWidth = 4;
         escenarioCtx.stroke();
-
-        // Dibujar ojos
-        escenarioCtx.fillStyle = 'white';
-        escenarioCtx.beginPath();
-        escenarioCtx.arc(centroX-12, centroY-10, 6, 0, 2*Math.PI);
-        escenarioCtx.fill();
-        escenarioCtx.beginPath();
-        escenarioCtx.arc(centroX+12, centroY-10, 6, 0, 2*Math.PI);
-        escenarioCtx.fill();
-        escenarioCtx.fillStyle = '#0d1f2c';
-        escenarioCtx.beginPath();
-        escenarioCtx.arc(centroX-14, centroY-12, 3, 0, 2*Math.PI);
-        escenarioCtx.fill();
-        escenarioCtx.beginPath();
-        escenarioCtx.arc(centroX+10, centroY-12, 3, 0, 2*Math.PI);
-        escenarioCtx.fill();
     }
 
-    // --- ANIMACIÓN DEL ESCENARIO ---
-    function iniciarAnimacion(movimientos) {
-        if (animacionActiva) {
-            cancelAnimationFrame(frameId);
-        }
-        secuenciaMovimientos = movimientos;
-        pasoActual = 0;
-        posX = 2; posY = 2;   // reiniciar posición central
-
-        function paso() {
-            if (pasoActual < secuenciaMovimientos.length) {
-                const dir = secuenciaMovimientos[pasoActual];
-                // Actualizar coordenadas (límites 0-4)
-                if (dir === 'arriba' && posY > 0) posY--;
-                else if (dir === 'abajo' && posY < 4) posY++;
-                else if (dir === 'izquierda' && posX > 0) posX--;
-                else if (dir === 'derecha' && posX < 4) posX++;
-                // Si choca con borde, simplemente no se mueve (se podría indicar)
-
-                pasoActual++;
-                dibujarEscenario();
-                frameId = requestAnimationFrame(paso);
-            } else {
-                // Fin de la animación
-                animacionActiva = false;
-                frameId = null;
-            }
-        }
-
-        animacionActiva = true;
-        dibujarEscenario(); // dibujo inicial
-        frameId = requestAnimationFrame(paso);
-    }
-
-    // --- EJECUTAR (nueva versión con escenario) ---
-    function ejecutar() {
-        const { exito, mensaje, movimientos } = obtenerSecuenciaMovimientos();
-
-        // Mostrar log también
-        let logLines = [];
-        if (!exito) {
-            logLines.push(`❌ Error: ${mensaje}`);
-        } else {
-            logLines.push(`✅ Secuencia obtenida (${movimientos.length} movimientos): ${movimientos.join(' → ')}`);
-        }
-        logContent.innerHTML = logLines.map(l => `<div>${l}</div>`).join('');
-
-        // Abrir el escenario y animar (incluso si hay error, mostramos el escenario sin movimientos)
-        modal.classList.remove('hidden');
-        iniciarAnimacion(movimientos);  // si no hay movimientos, solo dibuja posición inicial
-    }
-
-    // --- REINICIAR (limpia consola) ---
     function reiniciar() {
         logContent.innerHTML = '-- Consola reiniciada --';
     }
 
-    // --- CERRAR ESCENARIO ---
     function cerrarEscenario() {
         modal.classList.add('hidden');
-        if (animacionActiva) {
-            cancelAnimationFrame(frameId);
-            animacionActiva = false;
-        }
+        if (animacionActiva) cancelAnimationFrame(frameId);
+        animacionActiva = false;
     }
 
     // --- Inicialización ---
     function init() {
-        resizeCanvas();
+        resizeCanvases();
 
         document.getElementById('btnAddInicio').addEventListener('click', () => addNode('inicio'));
         document.getElementById('btnAddMover').addEventListener('click', () => addNode('move'));
         document.getElementById('btnAddFin').addEventListener('click', () => addNode('fin'));
+        document.getElementById('btnAdd5000').addEventListener('click', add5000Nodes);
         document.getElementById('btnEjecutar').addEventListener('click', ejecutar);
         document.getElementById('btnReiniciar').addEventListener('click', reiniciar);
         btnCerrar.addEventListener('click', cerrarEscenario);
 
-        workspace.addEventListener('mousedown', handleMouseDown);
+        overlay.addEventListener('mousedown', handleMouseDown);
         window.addEventListener('mousemove', handleMouseMove);
         window.addEventListener('mouseup', handleMouseUp);
-        workspace.addEventListener('dragstart', (e) => e.preventDefault());
 
         // Nodos de ejemplo
         addNode('inicio');
         addNode('move');
         addNode('fin');
-
         setTimeout(() => {
             const inicioNode = nodes.find(n => n.type === 'inicio');
             const moveNode = nodes.find(n => n.type === 'move');
             const finNode = nodes.find(n => n.type === 'fin');
             if (inicioNode && moveNode) addConnection(inicioNode.id, moveNode.id);
             if (moveNode && finNode) addConnection(moveNode.id, finNode.id);
-        }, 100);
+        }, 200);
     }
 
     init();

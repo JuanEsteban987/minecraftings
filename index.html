@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Editor masivo · Create / SetVar + 5000 nodos</title>
+    <title>Editor con 500 nodos precargados · Create / SetVar</title>
     <style>
         * {
             box-sizing: border-box;
@@ -193,7 +193,6 @@
         <button id="btnAddFin">🏁 Fin</button>
         <button id="btnAddCreate">📦 Crear Objeto</button>
         <button id="btnAddSetVar">⚙️ Set Var</button>
-        <button id="btnAdd500">➕ 500 aleatorios</button>
         <input type="text" id="searchInput" placeholder="🔍 Buscar (id, tipo, dirección, var...)" />
         <button id="btnEjecutar">▶️ Ejecutar</button>
         <button id="btnReiniciar">♻️ Reiniciar</button>
@@ -210,11 +209,11 @@
 
     <div class="log-panel" id="logPanel">
         <div class="log-title">📋 Consola</div>
-        <div id="logContent">-- Editor con Create/SetVar listo --</div>
+        <div id="logContent">-- Editor con 500 nodos precargados --</div>
     </div>
 </div>
 
-<!-- Modal escenario (mejorado para mostrar objetos y color variable) -->
+<!-- Modal escenario -->
 <div id="modalEscenario" class="modal-overlay hidden">
     <div class="modal-content">
         <h2>🎮 ESCENARIO</h2>
@@ -227,7 +226,7 @@
 
 <script>
 (function() {
-    // --- Estado ampliado ---
+    // --- Estado ---
     let nodes = [];
     let connections = [];         // { fromId, toId }
     let nextId = 1;
@@ -263,9 +262,9 @@
     let posX = 2, posY = 2;
     const TAM_CELDA = 90;
 
-    // Estado global para el escenario (se construye en cada ejecución)
-    let escenarioObjetos = [];     // { x, y, tipo }
-    let colorPersonaje = '#d64550'; // rojo por defecto
+    // Estado global para el escenario
+    let escenarioObjetos = [];
+    let colorPersonaje = '#d64550';
 
     // --- Funciones de dibujo (nodos) ---
     function resizeCanvases() {
@@ -549,18 +548,17 @@
         }
         if (draggingNode) {
             if (!isDragging) {
-                // Doble clic? lo manejamos aparte con dblclick
+                // Posible clic, no acción
             }
             draggingNode = null;
         }
     }
 
-    // Doble clic para editar propiedades del nodo
     function handleDoubleClick(e) {
         const rect = workspace.getBoundingClientRect();
         const mx = e.clientX - rect.left;
         const my = e.clientY - rect.top;
-        const node = findNodeHeaderAt(mx, my); // también podríamos permitir clic en cualquier parte
+        const node = findNodeHeaderAt(mx, my);
         if (!node) return;
 
         if (node.type === 'move') {
@@ -618,7 +616,7 @@
         drawAll();
     }
 
-    // --- Añadir nodos ---
+    // --- Añadir nodos (individuales) ---
     function addNode(type, params = {}) {
         const newNode = {
             id: nextId++,
@@ -641,16 +639,34 @@
         drawAll();
     }
 
-    function addRandomNodes(count) {
-        for (let i = 0; i < count; i++) {
-            const r = Math.random();
-            let type;
-            if (r < 0.2) type = 'inicio';
-            else if (r < 0.4) type = 'fin';
-            else if (r < 0.6) type = 'move';
-            else if (r < 0.8) type = 'create';
-            else type = 'setvar';
-            addNode(type);
+    // --- Precarga de 500 nodos ---
+    function precargarNodos() {
+        // Ya hay algunos nodos de ejemplo, añadimos hasta llegar a 500
+        const tipos = ['inicio', 'move', 'fin', 'create', 'setvar'];
+        for (let i = nodes.length; i < 500; i++) {
+            const tipo = tipos[Math.floor(Math.random() * tipos.length)];
+            // Posición en cuadrícula para evitar solapamiento excesivo
+            const col = (i % 25) * 30 + 20;  // 25 columnas, separación 30px
+            const row = Math.floor(i / 25) * 30 + 20;
+            const x = col % (canvasNodes.width - 180);
+            const y = row % (canvasNodes.height - 110);
+            const nodo = {
+                id: nextId++,
+                type: tipo,
+                x: x,
+                y: y,
+            };
+            if (tipo === 'move') nodo.direction = ['arriba','abajo','izquierda','derecha'][Math.floor(Math.random()*4)];
+            if (tipo === 'create') {
+                nodo.objTipo = Math.random() > 0.5 ? 'círculo' : 'cuadrado';
+                nodo.objX = Math.floor(Math.random()*5);
+                nodo.objY = Math.floor(Math.random()*5);
+            }
+            if (tipo === 'setvar') {
+                nodo.varName = 'color';
+                nodo.varValue = ['rojo','verde','azul'][Math.floor(Math.random()*3)];
+            }
+            nodes.push(nodo);
         }
         drawAll();
     }
@@ -674,7 +690,6 @@
             if (current.type === 'move') {
                 movimientos.push(current.direction || 'derecha');
             } else if (current.type === 'create') {
-                // añadir objeto al escenario
                 objetos.push({
                     x: current.objX ?? 2,
                     y: current.objY ?? 2,
@@ -686,9 +701,8 @@
                     if (val.includes('verde')) color = '#2ecc71';
                     else if (val.includes('azul')) color = '#3498db';
                     else if (val.includes('amarillo')) color = '#f1c40f';
-                    else color = '#d64550'; // rojo por defecto
+                    else color = '#d64550';
                 }
-                // se pueden añadir más variables
             }
 
             if (current.type === 'fin') break;
@@ -707,7 +721,6 @@
         const { exito, mensaje, movimientos, objetos, color } = obtenerSecuenciaYEstado();
         logContent.innerHTML = `<div>${exito ? '✅' : '❌'} ${mensaje} (${movimientos.length} movs, ${objetos.length} objetos)</div>`;
 
-        // Guardar estado para el escenario
         escenarioObjetos = objetos;
         colorPersonaje = color;
         secuenciaMovimientos = movimientos;
@@ -719,7 +732,7 @@
     function iniciarAnimacion() {
         if (animacionActiva) cancelAnimationFrame(frameId);
         pasoActual = 0;
-        posX = 2; posY = 2;  // inicio siempre centro
+        posX = 2; posY = 2;
 
         function paso() {
             if (pasoActual < secuenciaMovimientos.length) {
@@ -758,7 +771,7 @@
             escenarioCtx.stroke();
         }
 
-        // Dibujar objetos creados
+        // Dibujar objetos
         escenarioObjetos.forEach(obj => {
             const cx = obj.x * TAM_CELDA + TAM_CELDA/2;
             const cy = obj.y * TAM_CELDA + TAM_CELDA/2;
@@ -826,7 +839,6 @@
         document.getElementById('btnAddFin').addEventListener('click', () => addNode('fin'));
         document.getElementById('btnAddCreate').addEventListener('click', () => addNode('create'));
         document.getElementById('btnAddSetVar').addEventListener('click', () => addNode('setvar'));
-        document.getElementById('btnAdd500').addEventListener('click', () => addRandomNodes(500));
         document.getElementById('searchInput').addEventListener('input', (e) => {
             searchTerm = e.target.value;
             drawAll();
@@ -840,13 +852,17 @@
         window.addEventListener('mousemove', handleMouseMove);
         window.addEventListener('mouseup', handleMouseUp);
 
-        // Nodos de ejemplo
+        // Crear nodos de ejemplo (unos pocos)
         addNode('inicio');
         addNode('move', { direction: 'derecha' });
         addNode('create', { objTipo: 'círculo', objX: 1, objY: 1 });
         addNode('setvar', { varName: 'color', varValue: 'verde' });
         addNode('fin');
 
+        // Precargar hasta 500 nodos en total
+        precargarNodos();
+
+        // Conectar ejemplo: inicio -> move, move -> fin (para que haya algo)
         setTimeout(() => {
             const inicioNode = nodes.find(n => n.type === 'inicio');
             const moveNode = nodes.find(n => n.type === 'move');

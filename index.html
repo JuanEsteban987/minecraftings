@@ -1,6 +1,31 @@
 <!DOCTYPE html>
 <html>
-<body style="margin:0; overflow:hidden; background:#4a7c44;">
+<head>
+    <title>Survivor CS 2D Pro</title>
+    <style>
+        body { margin: 0; background: #4a7c44; overflow: hidden; font-family: 'Arial Rounded', sans-serif; color: white; }
+        #ui { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+        .menu { position: absolute; inset: 0; background: rgba(0,0,0,0.8); display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: all; }
+        #hud { position: absolute; bottom: 20px; left: 20px; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 10px; border: 2px solid #fff; }
+        .btn { padding: 15px 30px; margin: 10px; cursor: pointer; border-radius: 8px; border: none; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div id="menu" class="menu">
+            <h1>SURVIVOR CS 2D</h1>
+            <input type="text" id="ip" value="127.0.0.1" style="padding:10px; text-align:center;">
+            <div>
+                <button class="btn" style="background:#e67e22" onclick="join('TR')">TERRORISTA</button>
+                <button class="btn" style="background:#3498db" onclick="join('CT')">CT</button>
+            </div>
+        </div>
+        <div id="hud">
+            HP: 100 | [Q] Pared de Piedra | [E] Plantar Bomba (TR)
+        </div>
+    </div>
+
     <canvas id="game"></canvas>
 
 <script>
@@ -8,72 +33,101 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth; canvas.height = window.innerHeight;
 
-let socket = new WebSocket("ws://127.0.0.1:8080");
-let me = { x: 100, y: 100, targetX: 100, targetY: 100, team: 'TR' };
-let players = {};
-const keys = {};
+let socket, me = { x: 500, y: 500, ang: 0, team: 'TR', moving: false, firing: false };
+let cam = { x: 500, y: 500 };
+let players = {}, walls = [], keys = {};
+const lerp = (a, b, t) => a + (b - a) * t;
 
-// Función LERP: Suaviza el movimiento (t es la velocidad de suavizado)
-const lerp = (start, end, t) => start + (end - start) * t;
+function join(team) {
+    const ip = document.getElementById('ip').value;
+    me.team = team;
+    socket = new WebSocket(`ws://${ip}:8080`);
+    socket.onopen = () => { document.getElementById('menu').style.display = 'none'; loop(); };
+    socket.onmessage = (e) => {
+        if (e.data.startsWith("S:")) {
+            e.data.substring(2).split(";").forEach(p => {
+                if(!p) return;
+                const [id, d] = p.split("|");
+                const [x, y, ang, t, mov, fir] = d.split(",");
+                if(!players[id]) players[id] = { x:+x, y:+y, tx:+x, ty:+y, team:t };
+                else { players[id].tx = +x; players[id].ty = +y; players[id].ang = +ang; players[id].mov = mov==="true"; players[id].fir = fir==="true"; }
+            });
+        } else if (e.data.startsWith("W:")) {
+            walls = e.data.substring(2).split(";").map(w => ({ x: +w.split(",")[0], y: +w.split(",")[1] }));
+        }
+    };
+}
 
-socket.onmessage = (e) => {
-    if (e.data.startsWith("S:")) {
-        const parts = e.data.substring(2).split(";");
-        parts.forEach(p => {
-            if (!p) return;
-            const [id, data] = p.split("|");
-            const [x, y, team] = data.split(",");
-            
-            if (!players[id]) players[id] = { x: +x, y: +y, targetX: +x, targetY: +y, team };
-            else {
-                // En lugar de saltar a la posición, actualizamos el destino
-                players[id].targetX = +x;
-                players[id].targetY = +y;
-            }
-        });
-    }
+window.onkeydown = (e) => {
+    keys[e.key.toLowerCase()] = true;
+    if (e.key === 'q') socket.send(`B:${Math.round(me.x)},${Math.round(me.y)}`);
 };
-
-function update() {
-    if (keys['w']) me.y -= 4; if (keys['s']) me.y += 4;
-    if (keys['a']) me.x -= 4; if (keys['d']) me.x += 4;
-
-    // Enviamos nuestra posición al servidor
-    if (socket.readyState === 1) {
-        socket.send(`U:${Math.round(me.x)},${Math.round(me.y)},${me.team}`);
-    }
-
-    // Suavizamos el movimiento de los OTROS jugadores
-    for (let id in players) {
-        players[id].x = lerp(players[id].x, players[id].targetX, 0.2);
-        players[id].y = lerp(players[id].y, players[id].targetY, 0.2);
-    }
-}
-
-function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Dibujar a otros (Interpolados)
-    for (let id in players) {
-        ctx.fillStyle = players[id].team === 'CT' ? '#3498db' : '#e67e22';
-        ctx.beginPath();
-        ctx.roundRect(players[id].x - 15, players[id].y - 20, 30, 35, 10);
-        ctx.fill();
-    }
-
-    // Dibujarme a mí (Local - Respuesta inmediata)
-    ctx.fillStyle = "white";
-    ctx.beginPath();
-    ctx.roundRect(me.x - 15, me.y - 20, 30, 35, 10);
-    ctx.fill();
-
-    update();
-    requestAnimationFrame(draw);
-}
-
-window.onkeydown = (e) => keys[e.key.toLowerCase()] = true;
 window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
-draw();
+window.onmousemove = (e) => me.ang = Math.atan2(e.clientY - canvas.height/2, e.clientX - canvas.width/2);
+window.onmousedown = () => me.firing = true;
+window.onmouseup = () => me.firing = false;
+
+function loop() {
+    // 1. Lógica de Movimiento y Colisión
+    let nx = me.x, ny = me.y;
+    if (keys['w']) ny -= 4; if (keys['s']) ny += 4;
+    if (keys['a']) nx -= 4; if (keys['d']) nx += 4;
+    
+    let collision = walls.some(w => Math.hypot(nx - w.x, ny - w.y) < 35);
+    if (!collision) { me.x = nx; me.y = ny; }
+    me.moving = (keys['w'] || keys['s'] || keys['a'] || keys['d']);
+
+    // 2. Suavizado de Cámara (Lerp)
+    cam.x = lerp(cam.x, me.x, 0.1);
+    cam.y = lerp(cam.y, me.y, 0.1);
+
+    // 3. Dibujado
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.translate(canvas.width/2 - cam.x, canvas.height/2 - cam.y);
+
+    // Dibujar Suelo (Grid)
+    ctx.strokeStyle = "rgba(255,255,255,0.05)";
+    for(let i=0; i<2000; i+=100) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,2000); ctx.stroke(); }
+
+    // Dibujar Paredes
+    walls.forEach(w => {
+        ctx.fillStyle = "#7f8c8d";
+        ctx.beginPath(); ctx.roundRect(w.x-20, w.y-20, 40, 40, 8); ctx.fill();
+        ctx.stroke();
+    });
+
+    // Dibujar Jugadores (Interpolados)
+    Object.keys(players).forEach(id => {
+        let p = players[id];
+        p.x = lerp(p.x, p.tx, 0.2); p.y = lerp(p.y, p.ty, 0.2);
+        drawSurvivor(p);
+    });
+    drawSurvivor(me);
+
+    ctx.restore();
+
+    if (socket.readyState === 1) socket.send(`U:${Math.round(me.x)},${Math.round(me.y)},${me.ang},${me.team},${me.moving},${me.firing}`);
+    requestAnimationFrame(loop);
+}
+
+function drawSurvivor(p) {
+    const bob = Math.sin(Date.now() * 0.01) * 3;
+    ctx.save();
+    ctx.translate(p.x, p.y + bob);
+    // Cuerpo estilo bean Survivor.io
+    ctx.fillStyle = p.team === 'CT' ? '#3498db' : '#e67e22';
+    ctx.beginPath(); ctx.roundRect(-15, -20, 30, 35, 12); ctx.fill(); ctx.stroke();
+    // Ojos
+    ctx.fillStyle = "white";
+    ctx.beginPath(); ctx.arc(-6, -8, 4, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(6, -8, 4, 0, Math.PI*2); ctx.fill();
+    // Arma y Manos
+    ctx.rotate(p.ang);
+    ctx.fillStyle = "#333"; ctx.fillRect(15, -4, 20, 8);
+    ctx.fillStyle = "#f3c19d"; ctx.beginPath(); ctx.arc(15, 8, 5, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.restore();
+}
 </script>
 </body>
 </html>

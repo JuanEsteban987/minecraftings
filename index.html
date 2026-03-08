@@ -3,477 +3,681 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Editor de Nodos Visual - Como Unity</title>
+    <title>Juego de programación visual · Nodos Inicio, Mover, Fin</title>
     <style>
+        * {
+            box-sizing: border-box;
+            user-select: none; /* Evita seleccionar texto al arrastrar */
+            font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+        }
         body {
+            background: #2d3e4f;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
             margin: 0;
-            overflow: hidden;
-            font-family: Arial, sans-serif;
+            padding: 16px;
         }
-        #toolbar {
-            position: fixed;
-            top: 10px;
-            left: 10px;
+        .app-container {
+            background: #1e2a36;
+            border-radius: 24px;
+            padding: 20px;
+            box-shadow: 0 20px 30px rgba(0,0,0,0.5);
+            width: 1100px;
+            max-width: 100%;
+        }
+        .toolbar {
             background: #2c3e50;
-            color: white;
-            padding: 10px;
-            border-radius: 5px;
-            z-index: 10;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            padding: 12px 20px;
+            border-radius: 40px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 20px;
+            box-shadow: inset 0 2px 5px #1a242f, 0 4px 8px #0f1a22;
         }
-        #toolbar button {
-            margin: 5px;
-            padding: 8px 12px;
-            background: #3498db;
-            color: white;
+        .toolbar button {
+            background: #4a6fa5;
             border: none;
-            border-radius: 3px;
+            color: white;
+            padding: 10px 22px;
+            border-radius: 30px;
+            font-size: 1rem;
+            font-weight: bold;
             cursor: pointer;
+            box-shadow: 0 5px 0 #2c3e50, 0 6px 12px black;
+            transition: 0.07s ease;
+            border-bottom: 2px solid #1b2b3a;
+            letter-spacing: 0.5px;
         }
-        #toolbar button:hover {
-            background: #2980b9;
+        .toolbar button:hover {
+            background: #5f7fb0;
+            transform: translateY(-2px);
+            box-shadow: 0 7px 0 #2c3e50, 0 10px 18px black;
         }
-        #toolbar button.execute {
-            background: #e67e22;
+        .toolbar button:active {
+            transform: translateY(5px);
+            box-shadow: 0 2px 0 #2c3e50, 0 6px 12px black;
         }
-        #toolbar button.execute:hover {
-            background: #d35400;
+        .workspace-wrapper {
+            position: relative;
+            background: #3a4e62;
+            border-radius: 28px;
+            padding: 15px;
+            box-shadow: inset 0 0 0 2px #1d2a35, 0 10px 20px rgba(0,0,0,0.6);
         }
-        #toolbar button.reset {
-            background: #95a5a6;
+        #workspace {
+            position: relative;
+            width: 100%;
+            height: 540px;
+            background: #e2eaf1;
+            background-image: 
+                linear-gradient(rgba(120, 140, 160, 0.2) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(120, 140, 160, 0.2) 1px, transparent 1px);
+            background-size: 25px 25px;
+            border-radius: 20px;
+            overflow: hidden;
+            cursor: default;
+            box-shadow: inset 0 0 30px #1b2b38;
         }
-        #toolbar button.reset:hover {
-            background: #7f8c8d;
-        }
-        #message {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            background: rgba(0,0,0,0.7);
-            color: #fff;
-            padding: 10px 20px;
-            border-radius: 5px;
-            font-size: 14px;
+        #connections-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             pointer-events: none;
+            z-index: 10;
+        }
+        #nodes-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
             z-index: 20;
         }
-        canvas {
-            display: block;
-            background: #1e1e2f;
-            width: 100vw;
-            height: 100vh;
+        .node {
+            position: absolute;
+            width: 160px;
+            min-height: 90px;
+            background: #f4f9ff;
+            border-radius: 16px;
+            border: 3px solid #1f3a4b;
+            box-shadow: 0 8px 0 #0f2838, 0 12px 20px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            transition: box-shadow 0.1s;
+            cursor: default;
+            color: #0a1e2b;
+        }
+        .node:active {
+            box-shadow: 0 4px 0 #0f2838, 0 8px 15px rgba(0,0,0,0.3);
+        }
+        .node-header {
+            background: #2b4b65;
+            padding: 8px 12px;
+            border-radius: 12px 12px 0 0;
+            font-weight: bold;
+            color: white;
+            text-align: center;
+            cursor: grab;
+            border-bottom: 2px solid #0e2a3a;
+            letter-spacing: 0.8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .node-header:active {
+            cursor: grabbing;
+        }
+        .node-content {
+            padding: 12px 10px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: #eaf0f8;
+            border-radius: 0 0 16px 16px;
+        }
+        .node select {
+            background: #1f3e52;
+            color: white;
+            border: 2px solid #0e2a38;
+            border-radius: 30px;
+            padding: 5px 8px;
+            font-weight: bold;
+            outline: none;
+            cursor: pointer;
+        }
+        .node .tipo-badge {
+            background: #173342;
+            color: white;
+            border-radius: 30px;
+            padding: 4px 12px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            display: inline-block;
+            text-align: center;
+        }
+        .port {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #d64550;
+            border: 3px solid #631e26;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 30;
+            cursor: crosshair;
+            box-shadow: 0 2px 6px black;
+            transition: 0.1s;
+        }
+        .port.left {
+            left: -12px;
+            background: #4db8b8;
+            border-color: #1d6b6b;
+        }
+        .port.right {
+            right: -12px;
+            background: #f0a55a;
+            border-color: #a5521a;
+        }
+        .port:hover {
+            transform: translateY(-50%) scale(1.2);
+            filter: brightness(1.2);
+        }
+        .log-panel {
+            background: #17212b;
+            margin-top: 20px;
+            border-radius: 30px;
+            padding: 12px 22px;
+            color: #c9e9ff;
+            font-family: monospace;
+            font-size: 1rem;
+            border: 2px solid #0d1a24;
+            box-shadow: inset 0 0 10px #0b141c;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+        .log-panel div {
+            padding: 4px 0;
+            border-bottom: 1px dashed #3a5568;
+        }
+        .log-panel .log-title {
+            font-weight: bold;
+            color: #ffd966;
+            border: none;
+            font-size: 1.1rem;
+        }
+        .footer-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+            justify-content: flex-end;
         }
     </style>
 </head>
 <body>
-    <div id="toolbar">
-        <strong>🔌 Editor de Nodos</strong>
-        <button onclick="addNode('start')">➕ Nodo Inicio</button>
-        <button onclick="addNode('move')">➕ Nodo Mover</button>
-        <button onclick="addNode('end')">➕ Nodo Fin</button>
-        <button class="execute" onclick="executeGraph()">▶ Ejecutar</button>
-        <button class="reset" onclick="resetGraph()">⟲ Reiniciar</button>
+<div class="app-container">
+    <div class="toolbar">
+        <button id="btnAddInicio">➕ Inicio</button>
+        <button id="btnAddMover">🔄 Mover</button>
+        <button id="btnAddFin">🏁 Fin</button>
+        <button id="btnEjecutar">▶️ Ejecutar</button>
+        <button id="btnReiniciar">♻️ Reiniciar</button>
     </div>
-    <div id="message">Haz clic en puertos para conectar. Arrastra nodos por la cabecera.</div>
-    <canvas id="canvas"></canvas>
 
-    <script>
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        const messageDiv = document.getElementById('message');
+    <div class="workspace-wrapper">
+        <div id="workspace">
+            <canvas id="connections-canvas" width="1000" height="600"></canvas>
+            <div id="nodes-container"></div>
+        </div>
+    </div>
 
-        // Ajustar tamaño del canvas
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            draw();
+    <div class="log-panel" id="logPanel">
+        <div class="log-title">📋 Consola de ejecución</div>
+        <div id="logContent">-- Listo para programar --</div>
+    </div>
+</div>
+
+<script>
+(function() {
+    // --- Estado de la aplicación ---
+    let nodes = [];               // { id, type, x, y, direction? }
+    let connections = [];         // { fromId, toId }  (único origen y destino)
+    let nextId = 1;
+
+    // Referencias DOM
+    const workspace = document.getElementById('workspace');
+    const nodesContainer = document.getElementById('nodes-container');
+    const canvas = document.getElementById('connections-canvas');
+    const ctx = canvas.getContext('2d');
+    const logContent = document.getElementById('logContent');
+
+    // Variables para arrastrar nodos
+    let draggingNode = null;            // id del nodo que se mueve
+    let dragOffsetX = 0, dragOffsetY = 0; // offset dentro del nodo (relativo a esquina)
+
+    // Variables para conexión temporal
+    let draggingConnection = false;
+    let fromNodeId = null;
+    let tempEndPos = { x: 0, y: 0 };    // posición actual del mouse (para dibujar)
+
+    // Redimensionar canvas al tamaño real del workspace (importante para coordenadas)
+    function resizeCanvas() {
+        const rect = workspace.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+        drawConnections();
+    }
+    window.addEventListener('resize', () => {
+        resizeCanvas();
+        drawConnections();
+    });
+
+    // --- Funciones de actualización de UI ---
+    function renderNodes() {
+        // reconstruye todos los nodos desde el array 'nodes'
+        nodesContainer.innerHTML = '';
+        nodes.forEach(node => {
+            const nodeDiv = document.createElement('div');
+            nodeDiv.className = 'node';
+            nodeDiv.setAttribute('data-id', node.id);
+            nodeDiv.style.left = node.x + 'px';
+            nodeDiv.style.top = node.y + 'px';
+
+            // Header (arrastrable)
+            const header = document.createElement('div');
+            header.className = 'node-header';
+            header.textContent = node.type === 'inicio' ? '🚀 INICIO' : (node.type === 'fin' ? '🏁 FIN' : '⚙️ MOVER');
+            // pequeño badge según tipo (opcional)
+            const badge = document.createElement('span');
+            badge.className = 'tipo-badge';
+            badge.textContent = node.type === 'inicio' ? 'INICIO' : (node.type === 'fin' ? 'FIN' : 'MOVER');
+            header.appendChild(badge);  // lo añade a la derecha
+            nodeDiv.appendChild(header);
+
+            // Contenido (para mover, el select de dirección)
+            const content = document.createElement('div');
+            content.className = 'node-content';
+            if (node.type === 'move') {
+                const select = document.createElement('select');
+                select.setAttribute('data-id', node.id);
+                select.setAttribute('data-type', 'direction');
+                const direcciones = ['arriba', 'abajo', 'izquierda', 'derecha'];
+                direcciones.forEach(dir => {
+                    const option = document.createElement('option');
+                    option.value = dir;
+                    option.textContent = dir.charAt(0).toUpperCase() + dir.slice(1);
+                    if (node.direction === dir) option.selected = true;
+                    select.appendChild(option);
+                });
+                select.addEventListener('change', (e) => {
+                    const newDir = e.target.value;
+                    const targetNode = nodes.find(n => n.id == e.target.getAttribute('data-id'));
+                    if (targetNode) targetNode.direction = newDir;
+                });
+                content.appendChild(select);
+            } else {
+                // Para inicio y fin solo mostramos un texto
+                const hint = document.createElement('div');
+                hint.style.textAlign = 'center';
+                hint.style.padding = '8px';
+                hint.style.background = '#cbdbe9';
+                hint.style.borderRadius = '30px';
+                hint.style.fontWeight = '500';
+                hint.textContent = node.type === 'inicio' ? 'Punto de entrada' : 'Punto final';
+                content.appendChild(hint);
+            }
+            nodeDiv.appendChild(content);
+
+            // Puertos: izquierdo (entrada) y derecho (salida), excepto según tipo
+            // Inicio solo tiene salida (derecho). Fin solo tiene entrada (izquierdo). Mover ambos.
+            if (node.type !== 'inicio') {
+                const leftPort = document.createElement('div');
+                leftPort.className = 'port left';
+                leftPort.setAttribute('data-node-id', node.id);
+                leftPort.setAttribute('data-port-type', 'input');
+                nodeDiv.appendChild(leftPort);
+            }
+            if (node.type !== 'fin') {
+                const rightPort = document.createElement('div');
+                rightPort.className = 'port right';
+                rightPort.setAttribute('data-node-id', node.id);
+                rightPort.setAttribute('data-port-type', 'output');
+                nodeDiv.appendChild(rightPort);
+            }
+
+            nodesContainer.appendChild(nodeDiv);
+        });
+        drawConnections(); // asegurar que las líneas se dibujan tras cambio
+    }
+
+    // Actualiza posiciones de los divs desde el estado (por si se movió mediante drag)
+    function syncNodePositions() {
+        nodes.forEach(node => {
+            const nodeDiv = document.querySelector(`.node[data-id="${node.id}"]`);
+            if (nodeDiv) {
+                nodeDiv.style.left = node.x + 'px';
+                nodeDiv.style.top = node.y + 'px';
+            }
+        });
+        drawConnections();
+    }
+
+    // Dibuja todas las conexiones y la línea temporal si está arrastrando
+    function drawConnections() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (!nodes.length) return;
+
+        // Dibujar conexiones permanentes
+        connections.forEach(conn => {
+            const fromPos = getPortPos(conn.fromId, 'output');
+            const toPos = getPortPos(conn.toId, 'input');
+            if (fromPos && toPos) {
+                drawLine(fromPos, toPos, '#1f6390', 4);
+            }
+        });
+
+        // Dibujar línea de arrastre si corresponde
+        if (draggingConnection && fromNodeId) {
+            const startPos = getPortPos(fromNodeId, 'output');
+            if (startPos) {
+                drawLine(startPos, tempEndPos, '#f0a55a', 3, true);
+            }
         }
-        window.addEventListener('resize', resizeCanvas);
+    }
+
+    function drawLine(from, to, color, width, dashed = false) {
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        if (dashed) {
+            ctx.setLineDash([8, 6]);
+        } else {
+            ctx.setLineDash([]);
+        }
+        ctx.stroke();
+        // dibujar punta de flecha pequeña
+        if (!dashed) {
+            const angle = Math.atan2(to.y - from.y, to.x - from.x);
+            const arrowSize = 10;
+            ctx.beginPath();
+            ctx.moveTo(to.x, to.y);
+            ctx.lineTo(to.x - arrowSize * Math.cos(angle - 0.3), to.y - arrowSize * Math.sin(angle - 0.3));
+            ctx.lineTo(to.x - arrowSize * Math.cos(angle + 0.3), to.y - arrowSize * Math.sin(angle + 0.3));
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+        }
+        ctx.setLineDash([]);
+    }
+
+    // Obtener coordenadas del puerto (relativo al canvas)
+    function getPortPos(nodeId, portType) {
+        const nodeDiv = document.querySelector(`.node[data-id="${nodeId}"]`);
+        if (!nodeDiv) return null;
+        const port = nodeDiv.querySelector(`.port.${portType === 'input' ? 'left' : 'right'}`);
+        if (!port) return null;
+
+        const canvasRect = canvas.getBoundingClientRect();
+        const portRect = port.getBoundingClientRect();
+        return {
+            x: portRect.left + portRect.width/2 - canvasRect.left,
+            y: portRect.top + portRect.height/2 - canvasRect.top
+        };
+    }
+
+    // --- Gestión de conexiones ---
+    function removeOutgoingFrom(nodeId) {
+        connections = connections.filter(c => c.fromId !== nodeId);
+    }
+    function removeIncomingTo(nodeId) {
+        connections = connections.filter(c => c.toId !== nodeId);
+    }
+
+    function addConnection(fromId, toId) {
+        if (fromId === toId) return false; // no auto-conexión
+
+        const fromNode = nodes.find(n => n.id == fromId);
+        const toNode = nodes.find(n => n.id == toId);
+        if (!fromNode || !toNode) return false;
+        // Validar tipos: from no puede ser fin (no tiene output), to no puede ser inicio (no tiene input)
+        if (fromNode.type === 'fin' || toNode.type === 'inicio') return false;
+
+        // Eliminar conexiones existentes que ocupen los puertos (único origen y destino)
+        removeOutgoingFrom(fromId);   // el nodo origen solo puede tener una salida
+        removeIncomingTo(toId);       // el nodo destino solo una entrada
+
+        connections.push({ fromId, toId });
+        drawConnections();
+        return true;
+    }
+
+    // --- Arrastre de nodos (desde header) ---
+    function startDragNode(nodeId, clientX, clientY) {
+        const node = nodes.find(n => n.id == nodeId);
+        if (!node) return;
+        const nodeDiv = document.querySelector(`.node[data-id="${nodeId}"]`);
+        if (!nodeDiv) return;
+        const rect = nodeDiv.getBoundingClientRect();
+        const workspaceRect = workspace.getBoundingClientRect();
+
+        draggingNode = nodeId;
+        // offset dentro del nodo (relativo a esquina superior izquierda)
+        dragOffsetX = clientX - rect.left;
+        dragOffsetY = clientY - rect.top;
+    }
+
+    function onDragNode(clientX, clientY) {
+        if (!draggingNode) return;
+        const workspaceRect = workspace.getBoundingClientRect();
+        // Calcular nueva posición dentro del workspace
+        let newX = clientX - workspaceRect.left - dragOffsetX;
+        let newY = clientY - workspaceRect.top - dragOffsetY;
+
+        // Limitar bordes (opcional)
+        newX = Math.max(0, Math.min(workspaceRect.width - 160, newX));
+        newY = Math.max(0, Math.min(workspaceRect.height - 100, newY));
+
+        const node = nodes.find(n => n.id == draggingNode);
+        if (node) {
+            node.x = newX;
+            node.y = newY;
+        }
+        syncNodePositions(); // mueve el div y redibuja canvas
+    }
+
+    function stopDragNode() {
+        draggingNode = null;
+    }
+
+    // --- Eventos de ratón (delegación) ---
+    function handleMouseDown(e) {
+        const target = e.target;
+
+        // Puerto de salida? (iniciar conexión)
+        if (target.classList.contains('port') && target.classList.contains('right')) {
+            e.preventDefault();
+            e.stopPropagation();
+            const nodeId = target.getAttribute('data-node-id');
+            if (!nodeId) return;
+            fromNodeId = nodeId;
+            draggingConnection = true;
+            tempEndPos = { x: e.clientX, y: e.clientY }; // se actualizará en mousemove
+            drawConnections();
+            return;
+        }
+
+        // Cabecera de nodo? (arrastrar nodo)
+        if (target.classList.contains('node-header') || (target.parentElement && target.parentElement.classList.contains('node-header'))) {
+            e.preventDefault();
+            const nodeDiv = target.closest('.node');
+            if (!nodeDiv) return;
+            const nodeId = nodeDiv.getAttribute('data-id');
+            if (!nodeId) return;
+            startDragNode(nodeId, e.clientX, e.clientY);
+        }
+    }
+
+    function handleMouseMove(e) {
+        if (draggingConnection) {
+            // actualizar posición temporal para dibujar la línea
+            const canvasRect = canvas.getBoundingClientRect();
+            tempEndPos.x = e.clientX - canvasRect.left;
+            tempEndPos.y = e.clientY - canvasRect.top;
+            drawConnections();
+        }
+        if (draggingNode) {
+            onDragNode(e.clientX, e.clientY);
+        }
+    }
+
+    function handleMouseUp(e) {
+        // Finalizar conexión si estábamos arrastrando
+        if (draggingConnection) {
+            const target = e.target;
+            // Ver si soltamos sobre un puerto de entrada (izquierdo)
+            if (target.classList.contains('port') && target.classList.contains('left')) {
+                const toNodeId = target.getAttribute('data-node-id');
+                if (toNodeId && fromNodeId) {
+                    addConnection(fromNodeId, toNodeId);
+                }
+            }
+            // Resetear estado de conexión
+            draggingConnection = false;
+            fromNodeId = null;
+            drawConnections();
+        }
+        if (draggingNode) {
+            stopDragNode();
+        }
+    }
+
+    // --- Añadir nodos ---
+    function addNode(type) {
+        // posición inicial escalonada para no superponer
+        const baseX = 50 + (nodes.length * 30) % 300;
+        const baseY = 50 + (nodes.length * 20) % 300;
+        const newNode = {
+            id: nextId++,
+            type: type,
+            x: baseX,
+            y: baseY,
+        };
+        if (type === 'move') {
+            newNode.direction = 'derecha'; // valor por defecto
+        }
+        nodes.push(newNode);
+        renderNodes();
+    }
+
+    // --- Ejecutar recorrido ---
+    function ejecutar() {
+        const inicio = nodes.find(n => n.type === 'inicio');
+        if (!inicio) {
+            logContent.innerHTML = '<div style="color:#ffa07a;">❌ Error: No hay nodo Inicio</div>';
+            return;
+        }
+
+        let logLines = [];
+        let visited = new Set();
+        let currentNode = inicio;
+        let steps = 0;
+        const maxSteps = 50; // seguridad
+
+        while (currentNode && steps < maxSteps) {
+            if (visited.has(currentNode.id)) {
+                logLines.push(`⚠️ Ciclo detectado en nodo ${currentNode.id}. Se detiene.`);
+                break;
+            }
+            visited.add(currentNode.id);
+
+            // Acción según tipo
+            if (currentNode.type === 'inicio') {
+                logLines.push(`🚀 Inicio (ID ${currentNode.id})`);
+            } else if (currentNode.type === 'move') {
+                const dir = currentNode.direction || 'derecha';
+                logLines.push(`⚙️ Mover → ${dir} (ID ${currentNode.id})`);
+            } else if (currentNode.type === 'fin') {
+                logLines.push(`🏁 Fin (ID ${currentNode.id}) — ¡Meta alcanzada!`);
+                break;
+            }
+
+            // Buscar siguiente nodo por conexión de salida
+            const outConn = connections.find(c => c.fromId === currentNode.id);
+            if (!outConn) {
+                if (currentNode.type !== 'fin') {
+                    logLines.push(`⛔ El flujo termina sin llegar a Fin.`);
+                }
+                break;
+            }
+            const nextNode = nodes.find(n => n.id == outConn.toId);
+            if (!nextNode) {
+                logLines.push(`❌ Conexión rota desde nodo ${currentNode.id}`);
+                break;
+            }
+            currentNode = nextNode;
+            steps++;
+        }
+
+        if (steps >= maxSteps) logLines.push('🔄 Demasiados pasos (posible bucle largo)');
+
+        // Mostrar en el log
+        logContent.innerHTML = logLines.map(l => `<div>${l}</div>`).join('');
+    }
+
+    function reiniciar() {
+        logContent.innerHTML = '-- Consola reiniciada --';
+        // no se borran nodos ni conexiones, solo el log (como pide enunciado)
+    }
+
+    // --- Inicializar eventos y botones ---
+    function init() {
         resizeCanvas();
 
-        // --- Datos del grafo ---
-        let nodes = [];
-        let connections = []; // { fromNode, fromOutput, toNode, toInput }
-        let nextNodeId = 0;
+        // Botones de agregar
+        document.getElementById('btnAddInicio').addEventListener('click', () => addNode('inicio'));
+        document.getElementById('btnAddMover').addEventListener('click', () => addNode('move'));
+        document.getElementById('btnAddFin').addEventListener('click', () => addNode('fin'));
+        document.getElementById('btnEjecutar').addEventListener('click', ejecutar);
+        document.getElementById('btnReiniciar').addEventListener('click', reiniciar);
 
-        // Variables para arrastrar nodos
-        let draggingNode = null;
-        let dragOffsetX = 0, dragOffsetY = 0;
+        // Eventos de ratón en el workspace (para capturar puertos y cabeceras)
+        workspace.addEventListener('mousedown', handleMouseDown);
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
 
-        // Variables para conexiones en proceso
-        let connectingFrom = null; // { node, outputIndex, x, y }
-        let mouseX = 0, mouseY = 0;
+        // Evitar que se seleccione al arrastrar
+        workspace.addEventListener('dragstart', (e) => e.preventDefault());
 
-        // Tipos de nodos predefinidos
-        const nodeTypes = {
-            start: {
-                label: 'Inicio',
-                color: '#27ae60',
-                inputs: 0,
-                outputs: 1,
-                width: 120,
-                height: 60
-            },
-            move: {
-                label: 'Mover',
-                color: '#e67e22',
-                inputs: 1,
-                outputs: 1,
-                params: { direction: 'Adelante' }, // se puede cambiar
-                width: 140,
-                height: 80
-            },
-            end: {
-                label: 'Fin',
-                color: '#c0392b',
-                inputs: 1,
-                outputs: 0,
-                width: 120,
-                height: 60
-            }
-        };
-
-        // Función para agregar un nodo
-        function addNode(type) {
-            const node = {
-                id: nextNodeId++,
-                type: type,
-                x: 200 + Math.random() * 300,
-                y: 200 + Math.random() * 200,
-                ...nodeTypes[type]
-            };
-            // Para nodos move, añadir dirección por defecto
-            if (type === 'move') {
-                node.direction = 'Adelante'; // Adelante, Izquierda, Derecha
-            }
-            nodes.push(node);
-            draw();
-        }
-
-        // Dibujar todo
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Dibujar conexiones
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = '#ecf0f1';
-            ctx.fillStyle = '#ecf0f1';
-            connections.forEach(conn => {
-                const fromNode = nodes.find(n => n.id === conn.fromNode);
-                const toNode = nodes.find(n => n.id === conn.toNode);
-                if (!fromNode || !toNode) return;
-
-                const fromPos = getOutputPos(fromNode, conn.fromOutput);
-                const toPos = getInputPos(toNode, conn.toInput);
-
-                // Curva bezier
-                ctx.beginPath();
-                ctx.moveTo(fromPos.x, fromPos.y);
-                const cp1x = fromPos.x + 50;
-                const cp1y = fromPos.y;
-                const cp2x = toPos.x - 50;
-                const cp2y = toPos.y;
-                ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, toPos.x, toPos.y);
-                ctx.strokeStyle = '#3498db';
-                ctx.lineWidth = 3;
-                ctx.stroke();
-
-                // Pequeño círculo en los extremos
-                ctx.beginPath();
-                ctx.arc(fromPos.x, fromPos.y, 4, 0, 2*Math.PI);
-                ctx.fillStyle = '#3498db';
-                ctx.fill();
-                ctx.beginPath();
-                ctx.arc(toPos.x, toPos.y, 4, 0, 2*Math.PI);
-                ctx.fill();
-            });
-
-            // Dibujar conexión en progreso
-            if (connectingFrom) {
-                ctx.beginPath();
-                ctx.moveTo(connectingFrom.x, connectingFrom.y);
-                ctx.lineTo(mouseX, mouseY);
-                ctx.strokeStyle = '#e67e22';
-                ctx.lineWidth = 2;
-                ctx.setLineDash([5, 3]);
-                ctx.stroke();
-                ctx.setLineDash([]);
-            }
-
-            // Dibujar nodos
-            nodes.forEach(node => {
-                drawNode(node);
-            });
-        }
-
-        // Dibujar un nodo individual
-        function drawNode(node) {
-            const x = node.x, y = node.y;
-            const w = node.width, h = node.height;
-
-            // Sombra
-            ctx.shadowColor = 'rgba(0,0,0,0.5)';
-            ctx.shadowBlur = 10;
-            ctx.shadowOffsetY = 3;
-
-            // Cuerpo
-            ctx.fillStyle = node.color;
-            ctx.strokeStyle = '#34495e';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.roundRect(x, y, w, h, 10);
-            ctx.fill();
-            ctx.stroke();
-
-            // Cabecera
-            ctx.fillStyle = 'rgba(0,0,0,0.2)';
-            ctx.beginPath();
-            ctx.roundRect(x, y, w, 25, {tl:10, tr:10, br:0, bl:0});
-            ctx.fill();
-
-            // Título
-            ctx.shadowBlur = 0;
-            ctx.font = 'bold 14px Arial';
-            ctx.fillStyle = 'white';
-            ctx.fillText(node.label, x + 10, y + 18);
-
-            // Parámetros (solo para move)
-            if (node.type === 'move') {
-                ctx.font = '12px Arial';
-                ctx.fillStyle = '#ecf0f1';
-                ctx.fillText(node.direction, x + 10, y + 50);
-            }
-
-            // Puertos de entrada
-            const inputSpacing = (h - 30) / (node.inputs || 1);
-            for (let i = 0; i < node.inputs; i++) {
-                const portY = y + 30 + i * inputSpacing + inputSpacing/2;
-                ctx.beginPath();
-                ctx.arc(x, portY, 8, 0, 2*Math.PI);
-                ctx.fillStyle = '#2c3e50';
-                ctx.fill();
-                ctx.strokeStyle = '#ecf0f1';
-                ctx.lineWidth = 2;
-                ctx.stroke();
-                ctx.fillStyle = '#ecf0f1';
-                ctx.font = '10px Arial';
-                ctx.fillText('E' + i, x - 20, portY + 3);
-            }
-
-            // Puertos de salida
-            const outputSpacing = (h - 30) / (node.outputs || 1);
-            for (let i = 0; i < node.outputs; i++) {
-                const portY = y + 30 + i * outputSpacing + outputSpacing/2;
-                ctx.beginPath();
-                ctx.arc(x + w, portY, 8, 0, 2*Math.PI);
-                ctx.fillStyle = '#2c3e50';
-                ctx.fill();
-                ctx.strokeStyle = '#ecf0f1';
-                ctx.lineWidth = 2;
-                ctx.stroke();
-                ctx.fillStyle = '#ecf0f1';
-                ctx.font = '10px Arial';
-                ctx.fillText('S' + i, x + w + 10, portY + 3);
-            }
-
-            ctx.shadowBlur = 0;
-        }
-
-        // Helper para rectángulo redondeado
-        CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
-            if (w < 2 * r) r = w / 2;
-            if (h < 2 * r) r = h / 2;
-            this.moveTo(x + r, y);
-            this.lineTo(x + w - r, y);
-            this.quadraticCurveTo(x + w, y, x + w, y + r);
-            this.lineTo(x + w, y + h - r);
-            this.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-            this.lineTo(x + r, y + h);
-            this.quadraticCurveTo(x, y + h, x, y + h - r);
-            this.lineTo(x, y + r);
-            this.quadraticCurveTo(x, y, x + r, y);
-            return this;
-        };
-
-        // Obtener posición de un puerto de entrada
-        function getInputPos(node, index) {
-            const inputSpacing = (node.height - 30) / (node.inputs || 1);
-            const y = node.y + 30 + index * inputSpacing + inputSpacing/2;
-            return { x: node.x, y: y };
-        }
-
-        // Obtener posición de un puerto de salida
-        function getOutputPos(node, index) {
-            const outputSpacing = (node.height - 30) / (node.outputs || 1);
-            const y = node.y + 30 + index * outputSpacing + outputSpacing/2;
-            return { x: node.x + node.width, y: y };
-        }
-
-        // --- Eventos del mouse ---
-        canvas.addEventListener('mousedown', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            mouseX = (e.clientX - rect.left) * scaleX;
-            mouseY = (e.clientY - rect.top) * scaleY;
-
-            // Detectar clic en puertos de salida (para iniciar conexión)
-            for (let node of nodes) {
-                for (let i = 0; i < node.outputs; i++) {
-                    const pos = getOutputPos(node, i);
-                    const dist = Math.hypot(mouseX - pos.x, mouseY - pos.y);
-                    if (dist < 10) {
-                        connectingFrom = { nodeId: node.id, outputIndex: i, x: pos.x, y: pos.y };
-                        draw();
-                        return;
-                    }
-                }
-            }
-
-            // Detectar clic en cabecera para arrastrar
-            for (let node of nodes.slice().reverse()) { // recorrer de atrás a adelante para seleccionar el superior
-                if (mouseX >= node.x && mouseX <= node.x + node.width &&
-                    mouseY >= node.y && mouseY <= node.y + 25) { // solo cabecera
-                    draggingNode = node;
-                    dragOffsetX = mouseX - node.x;
-                    dragOffsetY = mouseY - node.y;
-                    break;
-                }
-            }
-        });
-
-        canvas.addEventListener('mousemove', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            mouseX = (e.clientX - rect.left) * scaleX;
-            mouseY = (e.clientY - rect.top) * scaleY;
-
-            if (draggingNode) {
-                draggingNode.x = mouseX - dragOffsetX;
-                draggingNode.y = mouseY - dragOffsetY;
-                draw();
-            } else if (connectingFrom) {
-                draw();
-            }
-        });
-
-        canvas.addEventListener('mouseup', (e) => {
-            if (draggingNode) {
-                draggingNode = null;
-                draw();
-                return;
-            }
-
-            if (connectingFrom) {
-                const rect = canvas.getBoundingClientRect();
-                const scaleX = canvas.width / rect.width;
-                const scaleY = canvas.height / rect.height;
-                mouseX = (e.clientX - rect.left) * scaleX;
-                mouseY = (e.clientY - rect.top) * scaleY;
-
-                // Buscar puerto de entrada
-                let targetNode = null;
-                let targetInput = -1;
-                for (let node of nodes) {
-                    for (let i = 0; i < node.inputs; i++) {
-                        const pos = getInputPos(node, i);
-                        const dist = Math.hypot(mouseX - pos.x, mouseY - pos.y);
-                        if (dist < 10) {
-                            targetNode = node;
-                            targetInput = i;
-                            break;
-                        }
-                    }
-                    if (targetNode) break;
-                }
-
-                if (targetNode) {
-                    // Evitar conexiones a sí mismo o duplicadas (simplificado)
-                    const fromNodeId = connectingFrom.nodeId;
-                    const fromOutput = connectingFrom.outputIndex;
-
-                    // Eliminar conexión existente en ese puerto de entrada si la hay (simplificado)
-                    connections = connections.filter(c => !(c.toNode === targetNode.id && c.toInput === targetInput));
-
-                    connections.push({
-                        fromNode: fromNodeId,
-                        fromOutput: fromOutput,
-                        toNode: targetNode.id,
-                        toInput: targetInput
-                    });
-                }
-
-                connectingFrom = null;
-                draw();
-            }
-        });
-
-        // Prevenir el menú contextual en el canvas
-        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-
-        // --- Lógica de ejecución ---
-        async function executeGraph() {
-            // Buscar nodo de inicio
-            const startNode = nodes.find(n => n.type === 'start');
-            if (!startNode) {
-                messageDiv.innerText = '❌ No hay nodo de inicio';
-                return;
-            }
-
-            messageDiv.innerText = '▶️ Ejecutando...';
-            let currentNode = startNode;
-            let visited = new Set(); // para evitar bucles infinitos (simple)
-
-            while (currentNode) {
-                if (visited.has(currentNode.id)) {
-                    messageDiv.innerText = '⚠️ Bucle detectado, deteniendo';
-                    break;
-                }
-                visited.add(currentNode.id);
-
-                // Ejecutar acción del nodo actual
-                if (currentNode.type === 'move') {
-                    messageDiv.innerText = `🤖 Mover: ${currentNode.direction}`;
-                    // Simular movimiento (en un juego real cambiaría posición)
-                    await new Promise(resolve => setTimeout(resolve, 800));
-                } else if (currentNode.type === 'end') {
-                    messageDiv.innerText = '🏁 Llegaste al fin';
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    break;
-                }
-
-                // Buscar siguiente nodo por la primera conexión de salida
-                const outConn = connections.find(c => c.fromNode === currentNode.id);
-                if (outConn) {
-                    currentNode = nodes.find(n => n.id === outConn.toNode);
-                } else {
-                    currentNode = null;
-                }
-            }
-            if (!currentNode) messageDiv.innerText = '✅ Secuencia terminada';
-        }
-
-        function resetGraph() {
-            nodes = [];
-            connections = [];
-            nextNodeId = 0;
-            draw();
-            messageDiv.innerText = 'Editor reiniciado';
-        }
-
-        // Inicializar con algunos nodos de ejemplo
-        addNode('start');
+        // Ejemplo inicial: un nodo de cada para empezar a jugar
+        addNode('inicio');
         addNode('move');
-        addNode('end');
-        // Ajustar posiciones
-        nodes[0].x = 200; nodes[0].y = 200;
-        nodes[1].x = 400; nodes[1].y = 200;
-        nodes[2].x = 600; nodes[2].y = 200;
-        // Conectar inicio->mover, mover->fin (opcional, se puede hacer manual)
-        connections.push({ fromNode: 0, fromOutput: 0, toNode: 1, toInput: 0 });
-        connections.push({ fromNode: 1, fromOutput: 0, toNode: 2, toInput: 0 });
-        draw();
-    </script>
+        addNode('fin');
+
+        // conexión de ejemplo (inicio -> mover)
+        setTimeout(() => {
+            // esperar a que se rendericen
+            const inicioNode = nodes.find(n => n.type === 'inicio');
+            const moveNode = nodes.find(n => n.type === 'move');
+            if (inicioNode && moveNode) {
+                addConnection(inicioNode.id, moveNode.id);
+            }
+            // mover -> fin
+            const finNode = nodes.find(n => n.type === 'fin');
+            if (moveNode && finNode) {
+                addConnection(moveNode.id, finNode.id);
+            }
+        }, 100);
+    }
+
+    // llamar al iniciar
+    init();
+})();
+</script>
 </body>
 </html>

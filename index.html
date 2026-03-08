@@ -1,31 +1,45 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-    <title>CS 2D: Global Offensive</title>
+    <meta charset="UTF-8">
+    <title>Survivor CS 2D Multiplayer</title>
     <style>
-        body { margin: 0; background: #111; color: white; font-family: sans-serif; overflow: hidden; }
-        canvas { display: block; filter: contrast(1.2); }
-        #menu { position: absolute; inset: 0; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
-        .btn { padding: 20px 40px; margin: 10px; cursor: pointer; border: none; font-weight: bold; font-size: 20px; transition: 0.3s; }
-        .tr { background: #de9b35; } .ct { background: #5d79ae; }
-        #hud { position: absolute; top: 20px; width: 100%; text-align: center; pointer-events: none; }
-        #bombProgress { width: 200px; height: 10px; background: #333; margin: 10px auto; display: none; }
-        #bombFill { height: 100%; width: 0%; background: red; }
+        body { margin: 0; background: #4a7c44; overflow: hidden; font-family: 'Arial Rounded MT Bold', sans-serif; color: white; }
+        canvas { display: block; filter: drop-shadow(0 0 10px rgba(0,0,0,0.5)); }
+        
+        /* Menú de Servidores */
+        #overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
+        .menu-card { background: #222; padding: 30px; border-radius: 20px; border: 4px solid #555; text-align: center; }
+        input { padding: 12px; border-radius: 8px; border: none; width: 250px; margin: 10px 0; font-size: 16px; text-align: center; }
+        .btn { padding: 15px 30px; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 18px; margin: 5px; transition: 0.2s; }
+        .tr { background: #e67e22; color: white; } .ct { background: #3498db; color: white; }
+        .btn:hover { transform: scale(1.05); opacity: 0.9; }
+
+        /* HUD */
+        #hud { position: absolute; top: 20px; left: 20px; pointer-events: none; }
+        .hp-container { width: 200px; height: 25px; background: #333; border: 3px solid #fff; border-radius: 15px; overflow: hidden; }
+        #hp-fill { width: 100%; height: 100%; background: #4caf50; transition: 0.3s; }
+        #bomb-alert { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); font-size: 30px; color: #f1c40f; text-shadow: 2px 2px #000; display: none; }
     </style>
 </head>
 <body>
 
-    <div id="menu">
-        <h1>ELIGE TU BANDO</h1>
-        <button class="btn tr" onclick="joinGame('TR')">TERRORISTAS</button>
-        <button class="btn ct" onclick="joinGame('CT')">ANTI-TERRORISTAS</button>
+    <div id="overlay">
+        <div class="menu-card">
+            <h1>SURVIVOR CS 2D</h1>
+            <input type="text" id="serverIP" value="localhost" placeholder="IP del Amigo">
+            <br>
+            <button class="btn tr" onclick="start('TR')">TERRORISTA</button>
+            <button class="btn ct" onclick="start('CT')">ANTI-TERRORISTA</button>
+            <p id="status"></p>
+        </div>
     </div>
 
     <div id="hud">
-        <h2 id="msg">ESPERANDO...</h2>
-        <div id="bombProgress"><div id="bombFill"></div></div>
-        <div id="stats">HP: 100 | Arma: AK-47</div>
+        <div class="hp-container"><div id="hp-fill"></div></div>
+        <h2 id="weapon-name">AK-47</h2>
     </div>
+    <div id="bomb-alert">⚠️ ¡BOMBA PLANTADA! ⚠️</div>
 
     <canvas id="gameCanvas"></canvas>
 
@@ -35,121 +49,116 @@ const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-let me = { x: 200, y: 200, angle: 0, team: null, hp: 100, isPlanting: false };
+let socket;
+let me = { x: 400, y: 300, angle: 0, team: 'TR', isMoving: false, firing: false };
 let players = {};
-let bombPos = { x: 600, y: 400, r: 80 }; // Zona de bomba A
-let bombState = "idle"; // idle, planting, planted
-let plantTimer = 0;
-const socket = new WebSocket('ws://localhost:8080');
+let keys = {};
+let lastNetUpdate = 0;
+let bombPos = { x: 800, y: 500 };
 
-// Para evitar el lag al disparar (Throttling)
-let lastNetworkUpdate = 0;
+function start(team) {
+    const ip = document.getElementById('serverIP').value;
+    socket = new WebSocket(`ws://${ip}:8080`);
 
-function joinGame(team) {
-    me.team = team;
-    me.x = team === 'TR' ? 100 : canvas.width - 100;
-    document.getElementById('menu').style.display = 'none';
-}
+    socket.onopen = () => {
+        me.team = team;
+        document.getElementById('overlay').style.display = 'none';
+        requestAnimationFrame(loop);
+    };
 
-window.onkeydown = (e) => { keys[e.key.toLowerCase()] = true; };
-window.onkeyup = (e) => { keys[e.key.toLowerCase()] = false; me.isPlanting = false; };
-const keys = {};
-
-socket.onmessage = (e) => {
-    if (e.data.startsWith("STATE:")) {
-        const raw = e.data.substring(6).split(";");
-        raw.forEach(p => {
-            if (!p) return;
-            const [id, data] = p.split("|");
-            const [x, y, ang, team, fire] = data.split(",");
-            players[id] = { x: +x, y: +y, angle: +ang, team, fire: fire === "true" };
-        });
-    } else if (e.data === "BOMB_EVENT:PLANTED") {
-        bombState = "planted";
-        document.getElementById('msg').innerText = "¡LA BOMBA HA SIDO PLANTADA!";
-        document.getElementById('msg').style.color = "red";
-    }
-};
-
-function checkBomb() {
-    const dist = Math.hypot(me.x - bombPos.x, me.y - bombPos.y);
-    if (me.team === 'TR' && dist < bombPos.r && keys['e'] && bombState === "idle") {
-        me.isPlanting = true;
-        plantTimer += 1.5;
-        document.getElementById('bombProgress').style.display = 'block';
-        document.getElementById('bombFill').style.width = plantTimer + "%";
-        if (plantTimer >= 100) {
-            socket.send("BOMB_PLANTED");
-            bombState = "planted";
-            me.isPlanting = false;
+    socket.onmessage = (e) => {
+        if (e.data.startsWith("STATE:")) {
+            const raw = e.data.substring(6).split(";");
+            raw.forEach(p => {
+                if (!p) return;
+                const [id, data] = p.split("|");
+                const [x, y, ang, team, mov, fire] = data.split(",");
+                players[id] = { x: +x, y: +y, angle: +ang, team, isMoving: mov === "true", firing: fire === "true" };
+            });
+        } else if (e.data.includes("PLANTED")) {
+            document.getElementById('bomb-alert').style.display = 'block';
         }
-    } else {
-        me.isPlanting = false;
-        plantTimer = 0;
-        document.getElementById('bombProgress').style.display = 'none';
-    }
+    };
 }
 
-function update() {
-    if (!me.team) return;
+window.onkeydown = (e) => keys[e.key.toLowerCase()] = true;
+window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
+window.onmousemove = (e) => me.angle = Math.atan2(e.clientY - me.y, e.clientX - me.x);
+window.onmousedown = () => me.firing = true;
+window.onmouseup = () => me.firing = false;
 
-    if (keys['w']) me.y -= 4; if (keys['s']) me.y += 4;
-    if (keys['a']) me.x -= 4; if (keys['d']) me.x += 4;
+function drawSurvivor(p, isMe) {
+    const bob = Math.sin(Date.now() * 0.01) * 4;
+    const walkSwing = p.isMoving ? Math.sin(Date.now() * 0.015) * 12 : 0;
 
-    window.onmousemove = (e) => { me.angle = Math.atan2(e.clientY - me.y, e.clientX - me.x); };
-    
-    checkBomb();
+    ctx.save();
+    ctx.translate(p.x, p.y + bob);
 
-    // Enviamos al servidor máximo cada 30ms para no saturar
-    const now = Date.now();
-    if (now - lastNetworkUpdate > 30 && socket.readyState === 1) {
-        socket.send(`UPDATE:${me.x},${me.y},${me.angle},${me.team},${keys[' '] || false}`);
-        lastNetworkUpdate = now;
-    }
-}
+    // Sombra
+    ctx.fillStyle = "rgba(0,0,0,0.15)";
+    ctx.beginPath(); ctx.ellipse(0, 15, 12, 6, 0, 0, Math.PI*2); ctx.fill();
 
-function draw() {
-    ctx.fillStyle = "#333";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Zona de Bomba
-    ctx.strokeStyle = "rgba(255, 255, 0, 0.3)";
-    ctx.lineWidth = 5;
+    // Cuerpo (Gota)
+    ctx.fillStyle = p.team === 'CT' ? '#3498db' : '#e67e22';
+    ctx.strokeStyle = "#222";
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(bombPos.x, bombPos.y, bombPos.r, 0, Math.PI * 2);
-    ctx.stroke();
+    ctx.roundRect(-15, -25, 30, 40, [15, 15, 5, 5]);
+    ctx.fill(); ctx.stroke();
+
+    // Ojos
+    ctx.fillStyle = "white";
+    ctx.beginPath(); ctx.arc(-6, -12, 5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(6, -12, 5, 0, Math.PI*2); ctx.fill();
+
+    // Brazos y Arma
+    ctx.rotate(p.angle);
+    ctx.fillStyle = "#333";
+    ctx.fillRect(12, -4, 25, 8); // Arma
+    
+    // Manos flotantes
+    ctx.fillStyle = "#f3c19d";
+    ctx.beginPath(); ctx.arc(15, 8 + walkSwing, 5, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(15, -8 - walkSwing, 5, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+    if (p.firing) { // Destello
+        ctx.fillStyle = "yellow";
+        ctx.beginPath(); ctx.arc(40, 0, 6, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+}
+
+function loop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Dibujar Zona de Bomba
     ctx.fillStyle = "rgba(255, 255, 0, 0.1)";
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(bombPos.x, bombPos.y, 80, 0, Math.PI*2); ctx.fill();
 
-    // Dibujar Jugadores
-    Object.keys(players).forEach(id => {
-        const p = players[id];
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.rotate(p.angle);
-        ctx.fillStyle = p.team === 'CT' ? '#5d79ae' : '#de9b35';
-        ctx.fillRect(-15, -15, 30, 30);
-        if (p.fire) { // Destello si dispara
-            ctx.fillStyle = "yellow";
-            ctx.fillRect(20, -2, 10, 4);
-        }
-        ctx.restore();
-    });
+    // Movimiento
+    let mx = 0, my = 0;
+    if (keys['w']) my = -1; if (keys['s']) my = 1;
+    if (keys['a']) mx = -1; if (keys['d']) mx = 1;
+    me.x += mx * 4; me.y += my * 4;
+    me.isMoving = (mx !== 0 || my !== 0);
 
-    // Dibujar mi personaje
-    if (me.team) {
-        ctx.save();
-        ctx.translate(me.x, me.y);
-        ctx.rotate(me.angle);
-        ctx.strokeStyle = "white";
-        ctx.strokeRect(-16, -16, 32, 32);
-        ctx.restore();
+    // Plantar Bomba (Terroristas)
+    if (me.team === 'TR' && keys['e'] && Math.hypot(me.x - bombPos.x, me.y - bombPos.y) < 80) {
+        socket.send("BOMB_PLANT");
     }
 
-    update();
-    requestAnimationFrame(draw);
+    // Dibujar todos
+    Object.keys(players).forEach(id => drawSurvivor(players[id], false));
+    drawSurvivor(me, true);
+
+    // Networking (Throttling a 30ms para suavidad)
+    if (Date.now() - lastNetUpdate > 30) {
+        socket.send(`UPDATE:${me.x},${me.y},${me.angle},${me.team},${me.isMoving},${me.firing}`);
+        lastNetUpdate = Date.now();
+    }
+
+    requestAnimationFrame(loop);
 }
-draw();
 </script>
 </body>
 </html>

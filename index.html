@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Editor visual masivo · 5000 nodos + búsqueda</title>
+    <title>Editor masivo · Create / SetVar + 5000 nodos</title>
     <style>
         * {
             box-sizing: border-box;
@@ -33,17 +33,18 @@
             border-radius: 50px;
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 8px;
             margin-bottom: 20px;
             box-shadow: inset 0 2px 6px #0a1a26, 0 6px 12px black;
+            align-items: center;
         }
         .toolbar button, .toolbar input {
             background: #31658c;
             border: none;
             color: white;
-            padding: 10px 18px;
+            padding: 8px 15px;
             border-radius: 40px;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
             font-weight: bold;
             cursor: pointer;
             box-shadow: 0 4px 0 #1b3f57;
@@ -64,11 +65,19 @@
             box-shadow: inset 0 2px 5px #0e1f2b;
             border: 2px solid #5f8db0;
             cursor: text;
-            width: 250px;
+            width: 220px;
             color: #e0f0ff;
         }
         .toolbar input::placeholder {
             color: #9bbad0;
+        }
+        .stats {
+            color: #aad0f5;
+            background: #0a1f2c;
+            border-radius: 20px;
+            padding: 4px 15px;
+            margin-left: auto;
+            font-weight: bold;
         }
         .workspace-wrapper {
             position: relative;
@@ -98,15 +107,8 @@
             height: 100%;
             pointer-events: none;
         }
-        #canvas-nodes {
-            pointer-events: none;  /* las interacciones se manejan por coordenadas en el workspace */
-            z-index: 5;
-        }
-        #canvas-connections {
-            pointer-events: none;
-            z-index: 10;
-        }
-        /* overlay invisible para capturar eventos */
+        #canvas-nodes { z-index: 5; }
+        #canvas-connections { z-index: 10; }
         #event-overlay {
             position: absolute;
             top: 0;
@@ -138,14 +140,7 @@
             border: none;
             font-size: 1.1rem;
         }
-        .stats {
-            color: #aad0f5;
-            background: #0a1f2c;
-            border-radius: 20px;
-            padding: 4px 15px;
-            margin-left: auto;
-            font-weight: bold;
-        }
+        /* Modal escenario */
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -162,6 +157,7 @@
             padding: 30px;
             border: 5px solid #4f8bbf;
             box-shadow: 0 20px 30px black;
+            text-align: center;
         }
         .modal-content h2 {
             color: white;
@@ -192,11 +188,13 @@
 <body>
 <div class="app-container">
     <div class="toolbar">
-        <button id="btnAddInicio">➕ Inicio</button>
+        <button id="btnAddInicio">🚀 Inicio</button>
         <button id="btnAddMover">🔄 Mover</button>
         <button id="btnAddFin">🏁 Fin</button>
-        <button id="btnAdd5000">⚡ Añadir 5000 nodos</button>
-        <input type="text" id="searchInput" placeholder="🔍 Buscar (id, tipo, dirección...)" />
+        <button id="btnAddCreate">📦 Crear Objeto</button>
+        <button id="btnAddSetVar">⚙️ Set Var</button>
+        <button id="btnAdd500">➕ 500 aleatorios</button>
+        <input type="text" id="searchInput" placeholder="🔍 Buscar (id, tipo, dirección, var...)" />
         <button id="btnEjecutar">▶️ Ejecutar</button>
         <button id="btnReiniciar">♻️ Reiniciar</button>
         <span class="stats" id="nodeCount">Nodos: 0</span>
@@ -212,11 +210,11 @@
 
     <div class="log-panel" id="logPanel">
         <div class="log-title">📋 Consola</div>
-        <div id="logContent">-- Editor masivo listo --</div>
+        <div id="logContent">-- Editor con Create/SetVar listo --</div>
     </div>
 </div>
 
-<!-- Modal escenario (igual que antes) -->
+<!-- Modal escenario (mejorado para mostrar objetos y color variable) -->
 <div id="modalEscenario" class="modal-overlay hidden">
     <div class="modal-content">
         <h2>🎮 ESCENARIO</h2>
@@ -229,13 +227,13 @@
 
 <script>
 (function() {
-    // --- Estado ---
+    // --- Estado ampliado ---
     let nodes = [];
     let connections = [];         // { fromId, toId }
     let nextId = 1;
     let searchTerm = '';
 
-    // Referencias a canvas
+    // Referencias canvas
     const workspace = document.getElementById('workspace');
     const canvasNodes = document.getElementById('canvas-nodes');
     const canvasConn = document.getElementById('canvas-connections');
@@ -245,13 +243,13 @@
     const logContent = document.getElementById('logContent');
     const nodeCountSpan = document.getElementById('nodeCount');
 
-    // Variables de interacción
-    let draggingNode = null;            // id del nodo arrastrado
+    // Variables interacción
+    let draggingNode = null;
     let dragOffsetX = 0, dragOffsetY = 0;
     let draggingConnection = false;
     let fromNodeId = null;
     let tempEndPos = { x: 0, y: 0 };
-    let isDragging = false;              // para distinguir click de arrastre
+    let isDragging = false;
 
     // Escenario
     const modal = document.getElementById('modalEscenario');
@@ -265,7 +263,11 @@
     let posX = 2, posY = 2;
     const TAM_CELDA = 90;
 
-    // --- Funciones de dibujo (nodos y conexiones) ---
+    // Estado global para el escenario (se construye en cada ejecución)
+    let escenarioObjetos = [];     // { x, y, tipo }
+    let colorPersonaje = '#d64550'; // rojo por defecto
+
+    // --- Funciones de dibujo (nodos) ---
     function resizeCanvases() {
         const rect = workspace.getBoundingClientRect();
         canvasNodes.width = rect.width;
@@ -281,18 +283,21 @@
         drawConnections();
     }
 
+    function matchesSearch(node) {
+        if (!searchTerm) return false;
+        const term = searchTerm.toLowerCase();
+        if (node.id.toString().includes(term)) return true;
+        if (node.type.toLowerCase().includes(term)) return true;
+        if (node.type === 'move' && node.direction && node.direction.toLowerCase().includes(term)) return true;
+        if (node.type === 'create' && node.objTipo && node.objTipo.toLowerCase().includes(term)) return true;
+        if (node.type === 'setvar' && node.varName && node.varName.toLowerCase().includes(term)) return true;
+        if (node.type === 'setvar' && node.varValue && node.varValue.toLowerCase().includes(term)) return true;
+        return false;
+    }
+
     function drawNodes() {
         ctxNodes.clearRect(0, 0, canvasNodes.width, canvasNodes.height);
-        const rect = canvasNodes.getBoundingClientRect();
-        const scaleX = canvasNodes.width / rect.width;   // normalmente 1 si coincide
-        const scaleY = canvasNodes.height / rect.height;
-
-        // Ordenar para que los nodos seleccionados (por búsqueda) se dibujen encima
-        const sorted = [...nodes].sort((a,b) => {
-            const aMatch = matchesSearch(a) ? 1 : 0;
-            const bMatch = matchesSearch(b) ? 1 : 0;
-            return aMatch - bMatch; // los que matchean van al final (encima)
-        });
+        const sorted = [...nodes].sort((a,b) => (matchesSearch(a) ? 1 : 0) - (matchesSearch(b) ? 1 : 0));
 
         for (let node of sorted) {
             const x = node.x;
@@ -300,52 +305,61 @@
             const w = 160;
             const h = 90;
 
-            // Sombra
             ctxNodes.shadowColor = '#00000060';
             ctxNodes.shadowBlur = 10;
             ctxNodes.shadowOffsetY = 4;
-            // Fondo del nodo
             ctxNodes.fillStyle = '#f4f9ff';
             ctxNodes.beginPath();
             ctxNodes.roundRect(x, y, w, h, 16);
             ctxNodes.fill();
-            // Borde (resaltar si coincide búsqueda)
             ctxNodes.shadowBlur = 0;
             ctxNodes.lineWidth = matchesSearch(node) ? 6 : 3;
             ctxNodes.strokeStyle = matchesSearch(node) ? '#f5c542' : '#1f3a4b';
             ctxNodes.stroke();
 
-            // Cabecera
+            // Cabecera según tipo
             ctxNodes.fillStyle = '#2b4b65';
             ctxNodes.beginPath();
-            ctxNodes.roundRect(x, y, w, 30, 12, 12, 0, 0); // esquinas superiores
+            ctxNodes.roundRect(x, y, w, 30, 12, 12, 0, 0);
             ctxNodes.fill();
 
-            // Texto cabecera
             ctxNodes.font = 'bold 14px "Segoe UI"';
             ctxNodes.fillStyle = 'white';
             ctxNodes.textAlign = 'left';
-            let headerText = node.type === 'inicio' ? '🚀 INICIO' : (node.type === 'fin' ? '🏁 FIN' : '⚙️ MOVER');
+            let headerText = '';
+            if (node.type === 'inicio') headerText = '🚀 INICIO';
+            else if (node.type === 'fin') headerText = '🏁 FIN';
+            else if (node.type === 'move') headerText = '🔄 MOVER';
+            else if (node.type === 'create') headerText = '📦 CREATE';
+            else if (node.type === 'setvar') headerText = '⚙️ SET VAR';
             ctxNodes.fillText(headerText, x + 12, y + 20);
 
-            // Badge tipo
             ctxNodes.font = 'bold 10px monospace';
             ctxNodes.fillStyle = '#173342';
             ctxNodes.textAlign = 'right';
             ctxNodes.fillText(node.type.toUpperCase(), x + w - 12, y + 20);
 
-            // Contenido
-            ctxNodes.font = '12px "Segoe UI"';
+            // Contenido específico
+            ctxNodes.font = '11px "Segoe UI"';
             ctxNodes.fillStyle = '#0a1e2b';
             if (node.type === 'move') {
                 ctxNodes.fillStyle = '#1f3e52';
-                ctxNodes.fillText(`Dirección: ${node.direction || 'derecha'}`, x + 15, y + 55);
+                ctxNodes.fillText(`Dir: ${node.direction || 'derecha'}`, x + 15, y + 55);
+            } else if (node.type === 'create') {
+                ctxNodes.fillStyle = '#2d6a4f';
+                ctxNodes.fillText(`Obj: ${node.objTipo || 'círculo'}`, x + 15, y + 50);
+                if (node.objX !== undefined && node.objY !== undefined) {
+                    ctxNodes.fillText(`(${node.objX},${node.objY})`, x + 15, y + 70);
+                }
+            } else if (node.type === 'setvar') {
+                ctxNodes.fillStyle = '#9c6b3d';
+                ctxNodes.fillText(`${node.varName || 'var'} = ${node.varValue || '?'}`, x + 15, y + 55);
             } else {
                 ctxNodes.fillStyle = '#346792';
                 ctxNodes.fillText(node.type === 'inicio' ? 'Entrada' : 'Final', x + 40, y + 55);
             }
 
-            // Puerto izquierdo (entrada)
+            // Puertos
             if (node.type !== 'inicio') {
                 ctxNodes.fillStyle = '#4db8b8';
                 ctxNodes.beginPath();
@@ -355,7 +369,6 @@
                 ctxNodes.lineWidth = 3;
                 ctxNodes.stroke();
             }
-            // Puerto derecho (salida)
             if (node.type !== 'fin') {
                 ctxNodes.fillStyle = '#f0a55a';
                 ctxNodes.beginPath();
@@ -366,7 +379,6 @@
                 ctxNodes.stroke();
             }
 
-            // Pequeño ID para depuración/búsqueda
             ctxNodes.font = '9px monospace';
             ctxNodes.fillStyle = '#3d5e7a';
             ctxNodes.fillText(`#${node.id}`, x + 120, y + 78);
@@ -375,11 +387,8 @@
         nodeCountSpan.textContent = `Nodos: ${nodes.length}`;
     }
 
-    // helper para roundRect
     CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r, tl, tr, bl, br) {
-        if (typeof r === 'number') {
-            tl = tr = bl = br = r;
-        }
+        if (typeof r === 'number') tl = tr = bl = br = r;
         this.beginPath();
         this.moveTo(x + tl, y);
         this.lineTo(x + w - tr, y);
@@ -440,102 +449,16 @@
         const y = node.y;
         const w = 160;
         const offsetX = portType === 'input' ? -6 : w + 6;
-        return {
-            x: x + offsetX,
-            y: y + 45
-        };
+        return { x: x + offsetX, y: y + 45 };
     }
 
-    // --- Interacción: detección de elementos bajo el mouse ---
-    function handleMouseDown(e) {
-        const rect = workspace.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-
-        // Detectar puertos de salida primero
-        const outputPortNode = findNodeWithOutputAt(mouseX, mouseY);
-        if (outputPortNode) {
-            e.preventDefault();
-            fromNodeId = outputPortNode.id;
-            draggingConnection = true;
-            tempEndPos.x = mouseX;
-            tempEndPos.y = mouseY;
-            drawAll();
-            return;
-        }
-
-        // Detectar cabecera de nodo (para arrastrar)
-        const headerNode = findNodeHeaderAt(mouseX, mouseY);
-        if (headerNode) {
-            e.preventDefault();
-            draggingNode = headerNode.id;
-            dragOffsetX = mouseX - headerNode.x;
-            dragOffsetY = mouseY - headerNode.y;
-            isDragging = false; // se convertirá en true si hay movimiento
-            return;
-        }
-    }
-
-    function handleMouseMove(e) {
-        const rect = workspace.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-
-        if (draggingConnection) {
-            tempEndPos.x = mouseX;
-            tempEndPos.y = mouseY;
-            drawAll();
-        }
-
-        if (draggingNode) {
-            isDragging = true;
-            const node = nodes.find(n => n.id == draggingNode);
-            if (node) {
-                let newX = mouseX - dragOffsetX;
-                let newY = mouseY - dragOffsetY;
-                // límites
-                newX = Math.max(0, Math.min(canvasNodes.width - 160, newX));
-                newY = Math.max(0, Math.min(canvasNodes.height - 90, newY));
-                node.x = newX;
-                node.y = newY;
-                drawAll();
-            }
-        }
-    }
-
-    function handleMouseUp(e) {
-        const rect = workspace.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-
-        if (draggingConnection) {
-            const inputPortNode = findNodeWithInputAt(mouseX, mouseY);
-            if (inputPortNode && fromNodeId) {
-                addConnection(fromNodeId, inputPortNode.id);
-            }
-            draggingConnection = false;
-            fromNodeId = null;
-            drawAll();
-        }
-
-        if (draggingNode) {
-            if (!isDragging) {
-                // Fue un clic sin arrastre: podríamos seleccionar, pero no necesario
-            }
-            draggingNode = null;
-            isDragging = false;
-        }
-    }
-
-    // Funciones de detección de área
+    // --- Interacción ---
     function findNodeWithOutputAt(mx, my) {
-        // busca nodo que tenga puerto derecho (output) y que no sea fin
         for (let node of nodes) {
             if (node.type === 'fin') continue;
-            const x = node.x + 166;  // posición del puerto derecho
+            const x = node.x + 166;
             const y = node.y + 45;
-            const dist = Math.hypot(mx - x, my - y);
-            if (dist < 15) return node;
+            if (Math.hypot(mx - x, my - y) < 15) return node;
         }
         return null;
     }
@@ -545,8 +468,7 @@
             if (node.type === 'inicio') continue;
             const x = node.x - 6;
             const y = node.y + 45;
-            const dist = Math.hypot(mx - x, my - y);
-            if (dist < 15) return node;
+            if (Math.hypot(mx - x, my - y) < 15) return node;
         }
         return null;
     }
@@ -560,100 +482,244 @@
         return null;
     }
 
-    // --- Conexiones ---
+    function handleMouseDown(e) {
+        const rect = workspace.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        const outNode = findNodeWithOutputAt(mx, my);
+        if (outNode) {
+            e.preventDefault();
+            fromNodeId = outNode.id;
+            draggingConnection = true;
+            tempEndPos.x = mx;
+            tempEndPos.y = my;
+            drawAll();
+            return;
+        }
+
+        const headerNode = findNodeHeaderAt(mx, my);
+        if (headerNode) {
+            e.preventDefault();
+            draggingNode = headerNode.id;
+            dragOffsetX = mx - headerNode.x;
+            dragOffsetY = my - headerNode.y;
+            isDragging = false;
+        }
+    }
+
+    function handleMouseMove(e) {
+        const rect = workspace.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        if (draggingConnection) {
+            tempEndPos.x = mx;
+            tempEndPos.y = my;
+            drawAll();
+        }
+        if (draggingNode) {
+            isDragging = true;
+            const node = nodes.find(n => n.id == draggingNode);
+            if (node) {
+                let newX = mx - dragOffsetX;
+                let newY = my - dragOffsetY;
+                newX = Math.max(0, Math.min(canvasNodes.width - 160, newX));
+                newY = Math.max(0, Math.min(canvasNodes.height - 90, newY));
+                node.x = newX;
+                node.y = newY;
+                drawAll();
+            }
+        }
+    }
+
+    function handleMouseUp(e) {
+        const rect = workspace.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        if (draggingConnection) {
+            const inNode = findNodeWithInputAt(mx, my);
+            if (inNode && fromNodeId) {
+                addConnection(fromNodeId, inNode.id);
+            }
+            draggingConnection = false;
+            fromNodeId = null;
+            drawAll();
+        }
+        if (draggingNode) {
+            if (!isDragging) {
+                // Doble clic? lo manejamos aparte con dblclick
+            }
+            draggingNode = null;
+        }
+    }
+
+    // Doble clic para editar propiedades del nodo
+    function handleDoubleClick(e) {
+        const rect = workspace.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const node = findNodeHeaderAt(mx, my); // también podríamos permitir clic en cualquier parte
+        if (!node) return;
+
+        if (node.type === 'move') {
+            const newDir = prompt('Nueva dirección (arriba, abajo, izquierda, derecha):', node.direction || 'derecha');
+            if (newDir && ['arriba','abajo','izquierda','derecha'].includes(newDir)) {
+                node.direction = newDir;
+                drawAll();
+            }
+        } else if (node.type === 'create') {
+            const input = prompt('Editar objeto: formato "tipo x y" (ej: círculo 2 3). Valores x,y de 0 a 4:', 
+                `${node.objTipo || 'círculo'} ${node.objX ?? 2} ${node.objY ?? 2}`);
+            if (input) {
+                const parts = input.trim().split(/\s+/);
+                if (parts.length >= 3) {
+                    node.objTipo = parts[0];
+                    node.objX = parseInt(parts[1]);
+                    node.objY = parseInt(parts[2]);
+                    if (isNaN(node.objX)) node.objX = 2;
+                    if (isNaN(node.objY)) node.objY = 2;
+                    node.objX = Math.min(4, Math.max(0, node.objX));
+                    node.objY = Math.min(4, Math.max(0, node.objY));
+                } else {
+                    node.objTipo = input;
+                    node.objX = 2; node.objY = 2;
+                }
+                drawAll();
+            }
+        } else if (node.type === 'setvar') {
+            const input = prompt('Editar variable: formato "nombre=valor" (ej: color=verde):', 
+                `${node.varName || 'color'}=${node.varValue || 'rojo'}`);
+            if (input) {
+                const eq = input.indexOf('=');
+                if (eq > 0) {
+                    node.varName = input.substring(0, eq).trim();
+                    node.varValue = input.substring(eq+1).trim();
+                } else {
+                    node.varName = input;
+                    node.varValue = '1';
+                }
+                drawAll();
+            }
+        } else {
+            alert('Nodo de tipo ' + node.type + ' no editable');
+        }
+    }
+
     function addConnection(fromId, toId) {
         if (fromId === toId) return;
         const fromNode = nodes.find(n => n.id == fromId);
         const toNode = nodes.find(n => n.id == toId);
         if (!fromNode || !toNode) return;
         if (fromNode.type === 'fin' || toNode.type === 'inicio') return;
-
-        // eliminar conexiones previas
         connections = connections.filter(c => c.fromId !== fromId && c.toId !== toId);
         connections.push({ fromId, toId });
         drawAll();
     }
 
-    // --- Búsqueda ---
-    function matchesSearch(node) {
-        if (!searchTerm) return false;
-        const term = searchTerm.toLowerCase();
-        return node.id.toString().includes(term) ||
-               node.type.toLowerCase().includes(term) ||
-               (node.direction && node.direction.toLowerCase().includes(term));
-    }
-
-    document.getElementById('searchInput').addEventListener('input', (e) => {
-        searchTerm = e.target.value;
-        drawAll();
-    });
-
     // --- Añadir nodos ---
-    function addNode(type) {
+    function addNode(type, params = {}) {
         const newNode = {
             id: nextId++,
             type: type,
             x: 50 + Math.random() * 800,
             y: 50 + Math.random() * 400,
+            ...params
         };
-        if (type === 'move') newNode.direction = ['arriba','abajo','izquierda','derecha'][Math.floor(Math.random()*4)];
+        if (type === 'move' && !newNode.direction) newNode.direction = 'derecha';
+        if (type === 'create') {
+            newNode.objTipo = newNode.objTipo || (Math.random() > 0.5 ? 'círculo' : 'cuadrado');
+            newNode.objX = newNode.objX ?? Math.floor(Math.random()*5);
+            newNode.objY = newNode.objY ?? Math.floor(Math.random()*5);
+        }
+        if (type === 'setvar') {
+            newNode.varName = newNode.varName || 'color';
+            newNode.varValue = newNode.varValue || ['rojo','verde','azul'][Math.floor(Math.random()*3)];
+        }
         nodes.push(newNode);
         drawAll();
     }
 
-    function add5000Nodes() {
-        for (let i = 0; i < 5000; i++) {
-            const type = ['inicio','move','fin'][Math.floor(Math.random()*3)];
-            const newNode = {
-                id: nextId++,
-                type: type,
-                x: 20 + Math.random() * (canvasNodes.width - 180),
-                y: 20 + Math.random() * (canvasNodes.height - 110),
-            };
-            if (type === 'move') newNode.direction = ['arriba','abajo','izquierda','derecha'][Math.floor(Math.random()*4)];
-            nodes.push(newNode);
+    function addRandomNodes(count) {
+        for (let i = 0; i < count; i++) {
+            const r = Math.random();
+            let type;
+            if (r < 0.2) type = 'inicio';
+            else if (r < 0.4) type = 'fin';
+            else if (r < 0.6) type = 'move';
+            else if (r < 0.8) type = 'create';
+            else type = 'setvar';
+            addNode(type);
         }
         drawAll();
-        logContent.innerHTML = `<div>✅ 5000 nodos añadidos (total: ${nodes.length})</div>`;
     }
 
-    // --- Ejecutar / Escenario ---
-    function obtenerSecuenciaMovimientos() {
+    // --- Ejecución: construir estado del escenario y secuencia de movimientos ---
+    function obtenerSecuenciaYEstado() {
         const inicio = nodes.find(n => n.type === 'inicio');
-        if (!inicio) return { exito: false, mensaje: 'No hay Inicio', movimientos: [] };
+        if (!inicio) return { exito: false, mensaje: 'No hay Inicio', movimientos: [], objetos: [], color: '#d64550' };
 
         let visitados = new Set();
         let current = inicio;
         let movimientos = [];
+        let objetos = [];
+        let color = '#d64550'; // rojo base
         let steps = 0;
+
         while (current && steps < 200) {
-            if (visitados.has(current.id)) return { exito: false, mensaje: 'Ciclo', movimientos };
+            if (visitados.has(current.id)) return { exito: false, mensaje: 'Ciclo', movimientos, objetos, color };
             visitados.add(current.id);
-            if (current.type === 'move') movimientos.push(current.direction || 'derecha');
-            if (current.type === 'fin') return { exito: true, mensaje: 'OK', movimientos };
+
+            if (current.type === 'move') {
+                movimientos.push(current.direction || 'derecha');
+            } else if (current.type === 'create') {
+                // añadir objeto al escenario
+                objetos.push({
+                    x: current.objX ?? 2,
+                    y: current.objY ?? 2,
+                    tipo: current.objTipo || 'círculo'
+                });
+            } else if (current.type === 'setvar') {
+                if (current.varName === 'color') {
+                    const val = (current.varValue || 'rojo').toLowerCase();
+                    if (val.includes('verde')) color = '#2ecc71';
+                    else if (val.includes('azul')) color = '#3498db';
+                    else if (val.includes('amarillo')) color = '#f1c40f';
+                    else color = '#d64550'; // rojo por defecto
+                }
+                // se pueden añadir más variables
+            }
+
+            if (current.type === 'fin') break;
 
             const outConn = connections.find(c => c.fromId === current.id);
-            if (!outConn) return { exito: current.type === 'fin', mensaje: 'Sin salida', movimientos };
+            if (!outConn) break;
             const next = nodes.find(n => n.id == outConn.toId);
-            if (!next) return { exito: false, mensaje: 'Conexión rota', movimientos };
+            if (!next) break;
             current = next;
             steps++;
         }
-        return { exito: false, mensaje: 'Límite', movimientos };
+        return { exito: true, mensaje: 'OK', movimientos, objetos, color };
     }
 
     function ejecutar() {
-        const { exito, mensaje, movimientos } = obtenerSecuenciaMovimientos();
-        logContent.innerHTML = `<div>${exito ? '✅' : '❌'} ${mensaje} (${movimientos.length} movs)</div>`;
+        const { exito, mensaje, movimientos, objetos, color } = obtenerSecuenciaYEstado();
+        logContent.innerHTML = `<div>${exito ? '✅' : '❌'} ${mensaje} (${movimientos.length} movs, ${objetos.length} objetos)</div>`;
+
+        // Guardar estado para el escenario
+        escenarioObjetos = objetos;
+        colorPersonaje = color;
+        secuenciaMovimientos = movimientos;
+
         modal.classList.remove('hidden');
-        iniciarAnimacion(movimientos);
+        iniciarAnimacion();
     }
 
-    function iniciarAnimacion(movimientos) {
+    function iniciarAnimacion() {
         if (animacionActiva) cancelAnimationFrame(frameId);
-        secuenciaMovimientos = movimientos;
         pasoActual = 0;
-        posX = 2; posY = 2;
+        posX = 2; posY = 2;  // inicio siempre centro
 
         function paso() {
             if (pasoActual < secuenciaMovimientos.length) {
@@ -677,6 +743,7 @@
 
     function dibujarEscenario() {
         escenarioCtx.clearRect(0, 0, 450, 450);
+        // Grid
         escenarioCtx.strokeStyle = '#2b4b65';
         escenarioCtx.lineWidth = 3;
         for (let i = 0; i <= 5; i++) {
@@ -690,11 +757,31 @@
             escenarioCtx.lineTo(450, p);
             escenarioCtx.stroke();
         }
+
+        // Dibujar objetos creados
+        escenarioObjetos.forEach(obj => {
+            const cx = obj.x * TAM_CELDA + TAM_CELDA/2;
+            const cy = obj.y * TAM_CELDA + TAM_CELDA/2;
+            if (obj.tipo === 'cuadrado') {
+                escenarioCtx.fillStyle = '#5dade2';
+                escenarioCtx.fillRect(cx-20, cy-20, 40, 40);
+            } else {
+                escenarioCtx.fillStyle = '#f7dc6f';
+                escenarioCtx.beginPath();
+                escenarioCtx.arc(cx, cy, 20, 0, 2*Math.PI);
+                escenarioCtx.fill();
+            }
+            escenarioCtx.strokeStyle = '#000';
+            escenarioCtx.lineWidth = 2;
+            escenarioCtx.stroke();
+        });
+
+        // Personaje
         const cx = posX * TAM_CELDA + TAM_CELDA/2;
         const cy = posY * TAM_CELDA + TAM_CELDA/2;
         escenarioCtx.beginPath();
         escenarioCtx.arc(cx, cy, 27, 0, 2*Math.PI);
-        escenarioCtx.fillStyle = '#d64550';
+        escenarioCtx.fillStyle = colorPersonaje;
         escenarioCtx.shadowColor = '#4a1f1f';
         escenarioCtx.shadowBlur = 12;
         escenarioCtx.fill();
@@ -702,6 +789,22 @@
         escenarioCtx.strokeStyle = '#ffdd99';
         escenarioCtx.lineWidth = 4;
         escenarioCtx.stroke();
+
+        // Ojos
+        escenarioCtx.fillStyle = 'white';
+        escenarioCtx.beginPath();
+        escenarioCtx.arc(cx-12, cy-10, 6, 0, 2*Math.PI);
+        escenarioCtx.fill();
+        escenarioCtx.beginPath();
+        escenarioCtx.arc(cx+12, cy-10, 6, 0, 2*Math.PI);
+        escenarioCtx.fill();
+        escenarioCtx.fillStyle = '#0d1f2c';
+        escenarioCtx.beginPath();
+        escenarioCtx.arc(cx-14, cy-12, 3, 0, 2*Math.PI);
+        escenarioCtx.fill();
+        escenarioCtx.beginPath();
+        escenarioCtx.arc(cx+10, cy-12, 3, 0, 2*Math.PI);
+        escenarioCtx.fill();
     }
 
     function reiniciar() {
@@ -721,19 +824,29 @@
         document.getElementById('btnAddInicio').addEventListener('click', () => addNode('inicio'));
         document.getElementById('btnAddMover').addEventListener('click', () => addNode('move'));
         document.getElementById('btnAddFin').addEventListener('click', () => addNode('fin'));
-        document.getElementById('btnAdd5000').addEventListener('click', add5000Nodes);
+        document.getElementById('btnAddCreate').addEventListener('click', () => addNode('create'));
+        document.getElementById('btnAddSetVar').addEventListener('click', () => addNode('setvar'));
+        document.getElementById('btnAdd500').addEventListener('click', () => addRandomNodes(500));
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            searchTerm = e.target.value;
+            drawAll();
+        });
         document.getElementById('btnEjecutar').addEventListener('click', ejecutar);
         document.getElementById('btnReiniciar').addEventListener('click', reiniciar);
         btnCerrar.addEventListener('click', cerrarEscenario);
 
         overlay.addEventListener('mousedown', handleMouseDown);
+        overlay.addEventListener('dblclick', handleDoubleClick);
         window.addEventListener('mousemove', handleMouseMove);
         window.addEventListener('mouseup', handleMouseUp);
 
         // Nodos de ejemplo
         addNode('inicio');
-        addNode('move');
+        addNode('move', { direction: 'derecha' });
+        addNode('create', { objTipo: 'círculo', objX: 1, objY: 1 });
+        addNode('setvar', { varName: 'color', varValue: 'verde' });
         addNode('fin');
+
         setTimeout(() => {
             const inicioNode = nodes.find(n => n.type === 'inicio');
             const moveNode = nodes.find(n => n.type === 'move');

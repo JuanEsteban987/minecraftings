@@ -1,24 +1,32 @@
 <!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>CS 2D Multiplayer - Java Backend</title>
+    <title>CS 2D: Global Offensive</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #1a1a1a; font-family: 'Courier New', Courier, monospace; }
-        canvas { display: block; background: #333; }
-        #hud {
-            position: absolute; bottom: 20px; left: 20px;
-            color: #0f0; text-shadow: 2px 2px #000;
-            pointer-events: none; font-size: 20px;
-        }
-        .weapon-info { font-size: 30px; color: #fff; }
+        body { margin: 0; background: #111; color: white; font-family: sans-serif; overflow: hidden; }
+        canvas { display: block; filter: contrast(1.2); }
+        #menu { position: absolute; inset: 0; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
+        .btn { padding: 20px 40px; margin: 10px; cursor: pointer; border: none; font-weight: bold; font-size: 20px; transition: 0.3s; }
+        .tr { background: #de9b35; } .ct { background: #5d79ae; }
+        #hud { position: absolute; top: 20px; width: 100%; text-align: center; pointer-events: none; }
+        #bombProgress { width: 200px; height: 10px; background: #333; margin: 10px auto; display: none; }
+        #bombFill { height: 100%; width: 0%; background: red; }
     </style>
 </head>
 <body>
-    <div id="hud">
-        <div id="hpDisplay">HEALTH: 100</div>
-        <div class="weapon-info" id="weaponDisplay">AK-47 | 30/90</div>
+
+    <div id="menu">
+        <h1>ELIGE TU BANDO</h1>
+        <button class="btn tr" onclick="joinGame('TR')">TERRORISTAS</button>
+        <button class="btn ct" onclick="joinGame('CT')">ANTI-TERRORISTAS</button>
     </div>
+
+    <div id="hud">
+        <h2 id="msg">ESPERANDO...</h2>
+        <div id="bombProgress"><div id="bombFill"></div></div>
+        <div id="stats">HP: 100 | Arma: AK-47</div>
+    </div>
+
     <canvas id="gameCanvas"></canvas>
 
 <script>
@@ -27,136 +35,121 @@ const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-// --- CONFIGURACIÓN DE ARMAS ---
-const WEAPONS = [
-    { name: "Glock", damage: 20, fireRate: 400, ammo: 20, maxAmmo: 100, recoil: 0.05, color: "#777" },
-    { name: "AK-47", damage: 35, fireRate: 100, ammo: 30, maxAmmo: 90, recoil: 0.12, color: "#5d4037" },
-    { name: "AWP", damage: 100, fireRate: 1500, ammo: 10, maxAmmo: 30, recoil: 0.5, color: "#2e7d32" }
-];
-
-// --- JUGADOR LOCAL ---
-let me = {
-    x: 100, y: 100, angle: 0, hp: 100,
-    currentWeapon: 1, // AK-47 por defecto
-    lastFired: 0,
-    team: Math.random() > 0.5 ? 'CT' : 'TR'
-};
-
+let me = { x: 200, y: 200, angle: 0, team: null, hp: 100, isPlanting: false };
 let players = {};
+let bombPos = { x: 600, y: 400, r: 80 }; // Zona de bomba A
+let bombState = "idle"; // idle, planting, planted
+let plantTimer = 0;
 const socket = new WebSocket('ws://localhost:8080');
 
-// --- INPUTS ---
+// Para evitar el lag al disparar (Throttling)
+let lastNetworkUpdate = 0;
+
+function joinGame(team) {
+    me.team = team;
+    me.x = team === 'TR' ? 100 : canvas.width - 100;
+    document.getElementById('menu').style.display = 'none';
+}
+
+window.onkeydown = (e) => { keys[e.key.toLowerCase()] = true; };
+window.onkeyup = (e) => { keys[e.key.toLowerCase()] = false; me.isPlanting = false; };
 const keys = {};
-let mousePos = { x: 0, y: 0 };
-let isMouseDown = false;
 
-window.onkeydown = (e) => {
-    keys[e.key.toLowerCase()] = true;
-    if (e.key === '1') me.currentWeapon = 0;
-    if (e.key === '2') me.currentWeapon = 1;
-    if (e.key === '3') me.currentWeapon = 2;
-};
-window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
-window.onmousemove = (e) => { mousePos.x = e.clientX; mousePos.y = e.clientY; };
-window.onmousedown = () => isMouseDown = true;
-window.onmouseup = () => isMouseDown = false;
-
-// --- LÓGICA DE RED ---
-socket.onmessage = (event) => {
-    const msg = event.data;
-    if (msg.startsWith("STATE:")) {
-        const data = msg.substring(6).split(";");
-        data.forEach(p => {
+socket.onmessage = (e) => {
+    if (e.data.startsWith("STATE:")) {
+        const raw = e.data.substring(6).split(";");
+        raw.forEach(p => {
             if (!p) return;
-            const [id, stats] = p.split("|");
-            const [x, y, angle, wIdx, firing, team] = stats.split(",");
-            players[id] = { 
-                x: parseFloat(x), y: parseFloat(y), 
-                angle: parseFloat(angle), wIdx: parseInt(wIdx),
-                isFiring: firing === "true", team: team
-            };
+            const [id, data] = p.split("|");
+            const [x, y, ang, team, fire] = data.split(",");
+            players[id] = { x: +x, y: +y, angle: +ang, team, fire: fire === "true" };
         });
+    } else if (e.data === "BOMB_EVENT:PLANTED") {
+        bombState = "planted";
+        document.getElementById('msg').innerText = "¡LA BOMBA HA SIDO PLANTADA!";
+        document.getElementById('msg').style.color = "red";
     }
 };
 
-function shoot() {
-    const now = Date.now();
-    const weapon = WEAPONS[me.currentWeapon];
-    if (now - me.lastFired > weapon.fireRate && weapon.ammo > 0) {
-        weapon.ammo--;
-        me.lastFired = now;
-        
-        // Efecto visual local y envío al server
-        socket.send(`HIT:${me.team}`); // Simplificado para este ejemplo
-        console.log("PUM! con " + weapon.name);
+function checkBomb() {
+    const dist = Math.hypot(me.x - bombPos.x, me.y - bombPos.y);
+    if (me.team === 'TR' && dist < bombPos.r && keys['e'] && bombState === "idle") {
+        me.isPlanting = true;
+        plantTimer += 1.5;
+        document.getElementById('bombProgress').style.display = 'block';
+        document.getElementById('bombFill').style.width = plantTimer + "%";
+        if (plantTimer >= 100) {
+            socket.send("BOMB_PLANTED");
+            bombState = "planted";
+            me.isPlanting = false;
+        }
+    } else {
+        me.isPlanting = false;
+        plantTimer = 0;
+        document.getElementById('bombProgress').style.display = 'none';
     }
 }
 
 function update() {
-    if (keys['w']) me.y -= 3;
-    if (keys['s']) me.y += 3;
-    if (keys['a']) me.x -= 3;
-    if (keys['d']) me.x += 3;
+    if (!me.team) return;
 
-    me.angle = Math.atan2(mousePos.y - me.y, mousePos.x - me.x);
+    if (keys['w']) me.y -= 4; if (keys['s']) me.y += 4;
+    if (keys['a']) me.x -= 4; if (keys['d']) me.x += 4;
 
-    if (isMouseDown) shoot();
+    window.onmousemove = (e) => { me.angle = Math.atan2(e.clientY - me.y, e.clientX - me.x); };
+    
+    checkBomb();
 
-    // Actualizar HUD
-    const w = WEAPONS[me.currentWeapon];
-    document.getElementById('weaponDisplay').innerText = `${w.name} | ${w.ammo}/${w.maxAmmo}`;
-    document.getElementById('hpDisplay').innerText = `HEALTH: ${me.hp}`;
-
-    // Enviar al servidor
-    if (socket.readyState === WebSocket.OPEN) {
-        socket.send(`UPDATE:${me.x},${me.y},${me.angle},${me.currentWeapon},${isMouseDown},${me.team}`);
+    // Enviamos al servidor máximo cada 30ms para no saturar
+    const now = Date.now();
+    if (now - lastNetworkUpdate > 30 && socket.readyState === 1) {
+        socket.send(`UPDATE:${me.x},${me.y},${me.angle},${me.team},${keys[' '] || false}`);
+        lastNetworkUpdate = now;
     }
 }
 
-function drawPlayer(p, isMe) {
-    ctx.save();
-    ctx.translate(p.x, p.y);
-    ctx.rotate(p.angle);
+function draw() {
+    ctx.fillStyle = "#333";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Cuerpo
-    ctx.fillStyle = p.team === 'CT' ? '#2980b9' : '#c0392b';
+    // Zona de Bomba
+    ctx.strokeStyle = "rgba(255, 255, 0, 0.3)";
+    ctx.lineWidth = 5;
     ctx.beginPath();
-    ctx.arc(0, 0, 20, 0, Math.PI * 2);
+    ctx.arc(bombPos.x, bombPos.y, bombPos.r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255, 255, 0, 0.1)";
     ctx.fill();
-    if (isMe) { ctx.strokeStyle = "white"; ctx.stroke(); }
 
-    // Arma
-    const weaponColor = WEAPONS[isMe ? me.currentWeapon : p.wIdx].color;
-    ctx.fillStyle = weaponColor;
-    ctx.fillRect(15, -5, 25, 10);
+    // Dibujar Jugadores
+    Object.keys(players).forEach(id => {
+        const p = players[id];
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.angle);
+        ctx.fillStyle = p.team === 'CT' ? '#5d79ae' : '#de9b35';
+        ctx.fillRect(-15, -15, 30, 30);
+        if (p.fire) { // Destello si dispara
+            ctx.fillStyle = "yellow";
+            ctx.fillRect(20, -2, 10, 4);
+        }
+        ctx.restore();
+    });
 
-    // Efecto de disparo
-    if (p.isFiring || (isMe && isMouseDown)) {
-        ctx.fillStyle = "yellow";
-        ctx.beginPath();
-        ctx.arc(45, 0, 5, 0, Math.PI * 2);
-        ctx.fill();
+    // Dibujar mi personaje
+    if (me.team) {
+        ctx.save();
+        ctx.translate(me.x, me.y);
+        ctx.rotate(me.angle);
+        ctx.strokeStyle = "white";
+        ctx.strokeRect(-16, -16, 32, 32);
+        ctx.restore();
     }
-    
-    ctx.restore();
-}
-
-function render() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Dibujar otros
-    for (let id in players) {
-        if (id !== socket.toString()) drawPlayer(players[id], false);
-    }
-
-    // Dibujar yo
-    drawPlayer(me, true);
 
     update();
-    requestAnimationFrame(render);
+    requestAnimationFrame(draw);
 }
-
-render();
+draw();
 </script>
 </body>
 </html>

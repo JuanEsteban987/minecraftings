@@ -1,352 +1,162 @@
-
-        .bar-fill { height: 100%; transition: width 0.3s ease; }
-        #hp-fill { background: var(--danger); }
-        #xp-fill { background: #0088ff; }
-
-        /* Inventario Emergente */
-        #inv-modal {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            display: none; width: 300px; z-index: 200;
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>CS 2D Multiplayer - Java Backend</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #1a1a1a; font-family: 'Courier New', Courier, monospace; }
+        canvas { display: block; background: #333; }
+        #hud {
+            position: absolute; bottom: 20px; left: 20px;
+            color: #0f0; text-shadow: 2px 2px #000;
+            pointer-events: none; font-size: 20px;
         }
+        .weapon-info { font-size: 30px; color: #fff; }
     </style>
 </head>
 <body>
-
-    <div id="main-menu">
-        <div class="window">
-            <h1>NEBULA RPG</h1>
-            <input type="text" id="in-nick" placeholder="Nickname..." maxlength="12">
-            <div style="display: flex; gap: 10px;">
-                <div style="flex:1">Ropa: <input type="color" id="in-skin" value="#ffd700"></div>
-                <div style="flex:1">Acc: <input type="color" id="in-acc" value="#ff4444"></div>
-            </div>
-            <button onclick="init(true)">CREAR MUNDO</button>
-            <div style="margin: 15px 0; color: #666;">— o —</div>
-            <input type="text" id="join-id" placeholder="Pegar ID del Host">
-            <button onclick="init(false)" style="background: #2e7d32;">UNIRSE A MUNDO</button>
-        </div>
+    <div id="hud">
+        <div id="hpDisplay">HEALTH: 100</div>
+        <div class="weapon-info" id="weaponDisplay">AK-47 | 30/90</div>
     </div>
-
-    <div id="top-left" class="hud-panel glass">
-        <span style="font-size: 0.7em; color: #888;">ID DE SALA:</span>
-        <div id="my-id-display" style="color: #0f0; font-size: 0.9em; margin-bottom: 10px;">Cargando...</div>
-        <div id="player-list"></div>
-    </div>
-
-    <div id="top-right" class="hud-panel glass interactive">
-        <span class="stat-badge">💰 $<span id="gold-ui">0</span></span>
-        <div style="border-top: 1px solid #444; padding-top: 10px;">
-            <input type="text" id="live-nick" oninput="syncAppearance()" style="padding: 5px; font-size: 0.8em;">
-            <div style="display:flex; gap:5px;">
-                <input type="color" id="live-skin" onchange="syncAppearance()">
-                <input type="color" id="live-acc" onchange="syncAppearance()">
-            </div>
-        </div>
-    </div>
-
-    <div id="bottom-center" class="hud-panel">
-        <div id="level-tag" style="margin-bottom: 5px; font-weight: bold;">NIVEL 1</div>
-        <div class="bar-container"><div id="hp-fill" class="bar-fill" style="width: 100%;"></div></div>
-        <div class="bar-container" style="height: 5px;"><div id="xp-fill" class="bar-fill" style="width: 0%;"></div></div>
-        <div style="font-size: 0.7em; color: #aaa; margin-top: 5px;">[WASD] Mover | [CLICK] Atacar | [I] Inventario</div>
-    </div>
-
-    <div id="inv-modal" class="window glass interactive">
-        <h2 style="color: var(--primary); margin: 0;">ESTADÍSTICAS</h2>
-        <div style="text-align: left; margin: 20px 0;">
-            <p>⚔️ Daño: <span id="stat-atk">10</span></p>
-            <p>🛡️ Defensa: <span id="stat-def">5</span></p>
-            <p>📈 XP: <span id="stat-xp">0/100</span></p>
-        </div>
-        <button onclick="toggleInventory()">CERRAR</button>
-    </div>
-
     <canvas id="gameCanvas"></canvas>
 
-    <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const peer = new Peer();
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 
-        // --- ESTADO DEL JUEGO ---
-        const WORLD_SIZE = 3000;
-        let isHost = false;
-        let gameRunning = false;
-        let gold = 0;
-        let animFrame = 0;
+// --- CONFIGURACIÓN DE ARMAS ---
+const WEAPONS = [
+    { name: "Glock", damage: 20, fireRate: 400, ammo: 20, maxAmmo: 100, recoil: 0.05, color: "#777" },
+    { name: "AK-47", damage: 35, fireRate: 100, ammo: 30, maxAmmo: 90, recoil: 0.12, color: "#5d4037" },
+    { name: "AWP", damage: 100, fireRate: 1500, ammo: 10, maxAmmo: 30, recoil: 0.5, color: "#2e7d32" }
+];
 
-        let myData = {
-            id: '', x: 1500, y: 1500, nick: 'Héroe', skin: '#ffd700', acc: '#ff4444',
-            hp: 100, maxHp: 100, lv: 1, xp: 0, atk: 15, angle: 0, state: 'idle', dir: 1
-        };
+// --- JUGADOR LOCAL ---
+let me = {
+    x: 100, y: 100, angle: 0, hp: 100,
+    currentWeapon: 1, // AK-47 por defecto
+    lastFired: 0,
+    team: Math.random() > 0.5 ? 'CT' : 'TR'
+};
 
-        let remotePlayers = {};
-        let slimes = [];
-        let peers = {};
+let players = {};
+const socket = new WebSocket('ws://localhost:8080');
 
-        // Zona Tienda
-        const shopPos = { x: 1450, y: 1450, size: 200 };
+// --- INPUTS ---
+const keys = {};
+let mousePos = { x: 0, y: 0 };
+let isMouseDown = false;
 
-        // --- INICIALIZACIÓN ---
-        function init(hostMode) {
-            isHost = hostMode;
-            myData.nick = document.getElementById('in-nick').value || "Explorador";
-            myData.skin = document.getElementById('in-skin').value;
-            myData.acc = document.getElementById('in-acc').value;
-            
-            document.getElementById('live-nick').value = myData.nick;
-            document.getElementById('live-skin').value = myData.skin;
-            document.getElementById('live-acc').value = myData.acc;
+window.onkeydown = (e) => {
+    keys[e.key.toLowerCase()] = true;
+    if (e.key === '1') me.currentWeapon = 0;
+    if (e.key === '2') me.currentWeapon = 1;
+    if (e.key === '3') me.currentWeapon = 2;
+};
+window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
+window.onmousemove = (e) => { mousePos.x = e.clientX; mousePos.y = e.clientY; };
+window.onmousedown = () => isMouseDown = true;
+window.onmouseup = () => isMouseDown = false;
 
-            if(!isHost) {
-                const targetId = document.getElementById('join-id').value;
-                if(!targetId) return alert("Introduce el ID del Host");
-                connectToPeer(targetId);
-            }
-
-            gameRunning = true;
-            document.getElementById('main-menu').style.display = 'none';
-            canvas.style.display = 'block';
-            if(isHost) spawnSlimes();
-            loop();
-        }
-
-        // --- CONEXIÓN P2P ---
-        peer.on('open', (id) => {
-            myData.id = id;
-            document.getElementById('my-id-display').innerText = id;
+// --- LÓGICA DE RED ---
+socket.onmessage = (event) => {
+    const msg = event.data;
+    if (msg.startsWith("STATE:")) {
+        const data = msg.substring(6).split(";");
+        data.forEach(p => {
+            if (!p) return;
+            const [id, stats] = p.split("|");
+            const [x, y, angle, wIdx, firing, team] = stats.split(",");
+            players[id] = { 
+                x: parseFloat(x), y: parseFloat(y), 
+                angle: parseFloat(angle), wIdx: parseInt(wIdx),
+                isFiring: firing === "true", team: team
+            };
         });
+    }
+};
 
-        peer.on('connection', (conn) => {
-            setupConn(conn);
-        });
+function shoot() {
+    const now = Date.now();
+    const weapon = WEAPONS[me.currentWeapon];
+    if (now - me.lastFired > weapon.fireRate && weapon.ammo > 0) {
+        weapon.ammo--;
+        me.lastFired = now;
+        
+        // Efecto visual local y envío al server
+        socket.send(`HIT:${me.team}`); // Simplificado para este ejemplo
+        console.log("PUM! con " + weapon.name);
+    }
+}
 
-        function connectToPeer(id) {
-            setupConn(peer.connect(id));
-        }
+function update() {
+    if (keys['w']) me.y -= 3;
+    if (keys['s']) me.y += 3;
+    if (keys['a']) me.x -= 3;
+    if (keys['d']) me.x += 3;
 
-        function setupConn(conn) {
-            peers[conn.peer] = conn;
-            conn.on('data', (data) => {
-                if(data.type === 'sync') remotePlayers[data.player.id] = data.player;
-                if(data.type === 'world') slimes = data.slimes;
-                if(data.type === 'hit') {
-                    if(data.target === myData.id) {
-                        myData.hp -= data.dmg;
-                        if(myData.hp <= 0) respawn();
-                    }
-                }
-                if(data.type === 'slime_hit' && isHost) {
-                    let s = slimes.find(s => s.id === data.sId);
-                    if(s) s.hp -= data.dmg;
-                }
-            });
-            conn.on('open', () => refreshPlayerList());
-            conn.on('close', () => { delete remotePlayers[conn.peer]; refreshPlayerList(); });
-        }
+    me.angle = Math.atan2(mousePos.y - me.y, mousePos.x - me.x);
 
-        function broadcast(msg) {
-            for(let id in peers) if(peers[id].open) peers[id].send(msg);
-        }
+    if (isMouseDown) shoot();
 
-        // --- LÓGICA DE JUEGO ---
-        function spawnSlimes() {
-            for(let i=0; i<25; i++) {
-                slimes.push({ id: i, x: Math.random()*WORLD_SIZE, y: Math.random()*WORLD_SIZE, hp: 60, maxHp: 60 });
-            }
-        }
+    // Actualizar HUD
+    const w = WEAPONS[me.currentWeapon];
+    document.getElementById('weaponDisplay').innerText = `${w.name} | ${w.ammo}/${w.maxAmmo}`;
+    document.getElementById('hpDisplay').innerText = `HEALTH: ${me.hp}`;
 
-        const keys = {};
-        window.onkeydown = (e) => {
-            keys[e.key.toLowerCase()] = true;
-            if(e.key.toLowerCase() === 'i') toggleInventory();
-        };
-        window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
+    // Enviar al servidor
+    if (socket.readyState === WebSocket.OPEN) {
+        socket.send(`UPDATE:${me.x},${me.y},${me.angle},${me.currentWeapon},${isMouseDown},${me.team}`);
+    }
+}
 
-        function toggleInventory() {
-            const modal = document.getElementById('inv-modal');
-            modal.style.display = (modal.style.display === 'block') ? 'none' : 'block';
-            document.getElementById('stat-atk').innerText = myData.atk;
-            document.getElementById('stat-xp').innerText = `${myData.xp}/100`;
-        }
+function drawPlayer(p, isMe) {
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.angle);
 
-        function syncAppearance() {
-            myData.nick = document.getElementById('live-nick').value;
-            myData.skin = document.getElementById('live-skin').value;
-            myData.acc = document.getElementById('live-acc').value;
-            refreshPlayerList();
-        }
+    // Cuerpo
+    ctx.fillStyle = p.team === 'CT' ? '#2980b9' : '#c0392b';
+    ctx.beginPath();
+    ctx.arc(0, 0, 20, 0, Math.PI * 2);
+    ctx.fill();
+    if (isMe) { ctx.strokeStyle = "white"; ctx.stroke(); }
 
-        function refreshPlayerList() {
-            let html = `<div class="player-tag" style="color:var(--primary)">★ ${myData.nick}</div>`;
-            for(let id in remotePlayers) html += `<div class="player-tag">● ${remotePlayers[id].nick}</div>`;
-            document.getElementById('player-list').innerHTML = html;
-        }
+    // Arma
+    const weaponColor = WEAPONS[isMe ? me.currentWeapon : p.wIdx].color;
+    ctx.fillStyle = weaponColor;
+    ctx.fillRect(15, -5, 25, 10);
 
-        window.onmousedown = (e) => {
-            if(!gameRunning) return;
-            myData.state = 'attack';
-            processAttack();
-            setTimeout(() => myData.state = 'idle', 150);
-        };
+    // Efecto de disparo
+    if (p.isFiring || (isMe && isMouseDown)) {
+        ctx.fillStyle = "yellow";
+        ctx.beginPath();
+        ctx.arc(45, 0, 5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    ctx.restore();
+}
 
-        window.onmousemove = (e) => {
-            if(!gameRunning) return;
-            myData.angle = Math.atan2(e.clientY - window.innerHeight/2, e.clientX - window.innerWidth/2);
-            myData.dir = (e.clientX > window.innerWidth/2) ? 1 : -1;
-        };
+function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Dibujar otros
+    for (let id in players) {
+        if (id !== socket.toString()) drawPlayer(players[id], false);
+    }
 
-        function processAttack() {
-            // Atacar Slimes
-            slimes.forEach(s => {
-                if(s.hp <= 0) return;
-                let dist = Math.hypot(s.x - myData.x, s.y - myData.y);
-                if(dist < 80) {
-                    if(isHost) s.hp -= myData.atk;
-                    else broadcast({ type: 'slime_hit', sId: s.id, dmg: myData.atk });
-                    if(s.hp <= 0 && isHost) { gold += 15; myData.xp += 20; checkLevel(); }
-                }
-            });
-            // PvP (Friendly Fire)
-            for(let id in remotePlayers) {
-                let p = remotePlayers[id];
-                if(Math.hypot(p.x - myData.x, p.y - myData.y) < 80) {
-                    broadcast({ type: 'hit', target: p.id, dmg: myData.atk });
-                }
-            }
-        }
+    // Dibujar yo
+    drawPlayer(me, true);
 
-        function checkLevel() {
-            if(myData.xp >= 100) {
-                myData.lv++; myData.xp = 0; myData.atk += 5; myData.maxHp += 20; myData.hp = myData.maxHp;
-                document.getElementById('level-tag').innerText = `NIVEL ${myData.lv}`;
-            }
-        }
+    update();
+    requestAnimationFrame(render);
+}
 
-        function respawn() {
-            myData.hp = myData.maxHp; myData.x = 1500; myData.y = 1500;
-        }
-
-        function loop() {
-            if(!gameRunning) return;
-            
-            // Movimiento
-            let moving = false;
-            const s = 5;
-            if(keys['w'] && myData.y > 0) { myData.y -= s; moving = true; }
-            if(keys['s'] && myData.y < WORLD_SIZE) { myData.y += s; moving = true; }
-            if(keys['a'] && myData.x > 0) { myData.x -= s; moving = true; }
-            if(keys['d'] && myData.x < WORLD_SIZE) { myData.x += s; moving = true; }
-            if(myData.state !== 'attack') myData.state = moving ? 'walk' : 'idle';
-
-            // Tienda
-            if(myData.x > shopPos.x && myData.x < shopPos.x + shopPos.size && myData.y > shopPos.y && myData.y < shopPos.y + shopPos.size) {
-                if(gold >= 100) { gold -= 100; myData.atk += 2; }
-            }
-
-            // Host: IA Slimes
-            if(isHost) {
-                const targets = [myData, ...Object.values(remotePlayers)];
-                slimes.forEach(sl => {
-                    if(sl.hp <= 0) return;
-                    let nearest = targets.sort((a,b) => Math.hypot(a.x-sl.x, a.y-sl.y) - Math.hypot(b.x-sl.x, b.y-sl.y))[0];
-                    let d = Math.hypot(nearest.x - sl.x, nearest.y - sl.y);
-                    if(d < 300) {
-                        sl.x += (nearest.x - sl.x) * 0.02;
-                        sl.y += (nearest.y - sl.y) * 0.02;
-                        if(d < 25 && Math.random() < 0.05) {
-                            if(nearest.id === myData.id) myData.hp -= 1;
-                            // Daño a clientes se maneja vía sync de vida si se quisiera, aquí es local para fluidez
-                        }
-                    }
-                });
-                broadcast({ type: 'world', slimes });
-            }
-
-            broadcast({ type: 'sync', player: myData });
-            
-            // UI Update
-            document.getElementById('hp-fill').style.width = (myData.hp/myData.maxHp)*100 + "%";
-            document.getElementById('xp-fill').style.width = (myData.xp/100)*100 + "%";
-            document.getElementById('gold-ui').innerText = gold;
-
-            draw();
-            requestAnimationFrame(loop);
-        }
-
-        // --- RENDERIZADO ---
-        function draw() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            const camX = canvas.width/2 - myData.x;
-            const camY = canvas.height/2 - myData.y;
-            
-            ctx.save();
-            ctx.translate(camX, camY);
-
-            // Fondo y cuadrícula
-            ctx.fillStyle = '#1b3a1a'; ctx.fillRect(0,0, WORLD_SIZE, WORLD_SIZE);
-            ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-            for(let i=0; i<=WORLD_SIZE; i+=100) {
-                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, WORLD_SIZE); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(WORLD_SIZE, i); ctx.stroke();
-            }
-
-            // Tienda (Visual)
-            ctx.fillStyle = '#5d4037'; ctx.fillRect(shopPos.x, shopPos.y, shopPos.size, shopPos.size);
-            ctx.fillStyle = '#ffd700'; ctx.font = 'bold 20px Arial';
-            ctx.fillText("FORJA: +ATK ($100)", shopPos.x + 10, shopPos.y + 100);
-
-            // Slimes
-            slimes.forEach(sl => {
-                if(sl.hp <= 0) return;
-                ctx.fillStyle = '#44ff44';
-                ctx.beginPath(); ctx.ellipse(sl.x, sl.y, 18, 14, 0, 0, Math.PI*2); ctx.fill();
-                // Barra HP Slime
-                ctx.fillStyle = '#000'; ctx.fillRect(sl.x-15, sl.y-25, 30, 4);
-                ctx.fillStyle = '#0f0'; ctx.fillRect(sl.x-15, sl.y-25, 30 * (sl.hp/sl.maxHp), 4);
-            });
-
-            // Otros Jugadores
-            for(let id in remotePlayers) drawChar(remotePlayers[id]);
-            
-            // Mi Jugador
-            drawChar(myData);
-
-            ctx.restore();
-            animFrame++;
-        }
-
-        function drawChar(p) {
-            ctx.save();
-            ctx.translate(p.x, p.y);
-            
-            // Barra HP
-            ctx.fillStyle = '#000'; ctx.fillRect(-20, -45, 40, 6);
-            ctx.fillStyle = (p.id === myData.id) ? '#0f0' : '#f00';
-            ctx.fillRect(-20, -45, 40 * (p.hp/p.maxHp), 6);
-            
-            // Cuerpo
-            let bounce = (p.state === 'walk') ? Math.sin(animFrame * 0.2) * 5 : 0;
-            ctx.save();
-            ctx.scale(p.dir, 1);
-            ctx.fillStyle = p.skin; ctx.fillRect(-15, -15 + bounce, 30, 30);
-            ctx.fillStyle = p.acc; ctx.fillRect(-15, -2 + bounce, 30, 6);
-            ctx.restore();
-
-            // Nick
-            ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.font = 'bold 12px sans-serif';
-            ctx.fillText(p.nick, 0, -55);
-
-            // Ataque
-            if(p.state === 'attack') {
-                ctx.rotate(p.angle);
-                ctx.strokeStyle = 'white'; ctx.lineWidth = 4;
-                ctx.beginPath(); ctx.arc(20, 0, 35, -0.8, 0.8); ctx.stroke();
-            }
-            ctx.restore();
-        }
-    </script>
+render();
+</script>
 </body>
 </html>
-

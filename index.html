@@ -1,1 +1,479 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor de Nodos Visual - Como Unity</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #toolbar {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: #2c3e50;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 10;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        #toolbar button {
+            margin: 5px;
+            padding: 8px 12px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        #toolbar button:hover {
+            background: #2980b9;
+        }
+        #toolbar button.execute {
+            background: #e67e22;
+        }
+        #toolbar button.execute:hover {
+            background: #d35400;
+        }
+        #toolbar button.reset {
+            background: #95a5a6;
+        }
+        #toolbar button.reset:hover {
+            background: #7f8c8d;
+        }
+        #message {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 14px;
+            pointer-events: none;
+            z-index: 20;
+        }
+        canvas {
+            display: block;
+            background: #1e1e2f;
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div id="toolbar">
+        <strong>🔌 Editor de Nodos</strong>
+        <button onclick="addNode('start')">➕ Nodo Inicio</button>
+        <button onclick="addNode('move')">➕ Nodo Mover</button>
+        <button onclick="addNode('end')">➕ Nodo Fin</button>
+        <button class="execute" onclick="executeGraph()">▶ Ejecutar</button>
+        <button class="reset" onclick="resetGraph()">⟲ Reiniciar</button>
+    </div>
+    <div id="message">Haz clic en puertos para conectar. Arrastra nodos por la cabecera.</div>
+    <canvas id="canvas"></canvas>
 
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const messageDiv = document.getElementById('message');
+
+        // Ajustar tamaño del canvas
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            draw();
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // --- Datos del grafo ---
+        let nodes = [];
+        let connections = []; // { fromNode, fromOutput, toNode, toInput }
+        let nextNodeId = 0;
+
+        // Variables para arrastrar nodos
+        let draggingNode = null;
+        let dragOffsetX = 0, dragOffsetY = 0;
+
+        // Variables para conexiones en proceso
+        let connectingFrom = null; // { node, outputIndex, x, y }
+        let mouseX = 0, mouseY = 0;
+
+        // Tipos de nodos predefinidos
+        const nodeTypes = {
+            start: {
+                label: 'Inicio',
+                color: '#27ae60',
+                inputs: 0,
+                outputs: 1,
+                width: 120,
+                height: 60
+            },
+            move: {
+                label: 'Mover',
+                color: '#e67e22',
+                inputs: 1,
+                outputs: 1,
+                params: { direction: 'Adelante' }, // se puede cambiar
+                width: 140,
+                height: 80
+            },
+            end: {
+                label: 'Fin',
+                color: '#c0392b',
+                inputs: 1,
+                outputs: 0,
+                width: 120,
+                height: 60
+            }
+        };
+
+        // Función para agregar un nodo
+        function addNode(type) {
+            const node = {
+                id: nextNodeId++,
+                type: type,
+                x: 200 + Math.random() * 300,
+                y: 200 + Math.random() * 200,
+                ...nodeTypes[type]
+            };
+            // Para nodos move, añadir dirección por defecto
+            if (type === 'move') {
+                node.direction = 'Adelante'; // Adelante, Izquierda, Derecha
+            }
+            nodes.push(node);
+            draw();
+        }
+
+        // Dibujar todo
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Dibujar conexiones
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#ecf0f1';
+            ctx.fillStyle = '#ecf0f1';
+            connections.forEach(conn => {
+                const fromNode = nodes.find(n => n.id === conn.fromNode);
+                const toNode = nodes.find(n => n.id === conn.toNode);
+                if (!fromNode || !toNode) return;
+
+                const fromPos = getOutputPos(fromNode, conn.fromOutput);
+                const toPos = getInputPos(toNode, conn.toInput);
+
+                // Curva bezier
+                ctx.beginPath();
+                ctx.moveTo(fromPos.x, fromPos.y);
+                const cp1x = fromPos.x + 50;
+                const cp1y = fromPos.y;
+                const cp2x = toPos.x - 50;
+                const cp2y = toPos.y;
+                ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, toPos.x, toPos.y);
+                ctx.strokeStyle = '#3498db';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                // Pequeño círculo en los extremos
+                ctx.beginPath();
+                ctx.arc(fromPos.x, fromPos.y, 4, 0, 2*Math.PI);
+                ctx.fillStyle = '#3498db';
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(toPos.x, toPos.y, 4, 0, 2*Math.PI);
+                ctx.fill();
+            });
+
+            // Dibujar conexión en progreso
+            if (connectingFrom) {
+                ctx.beginPath();
+                ctx.moveTo(connectingFrom.x, connectingFrom.y);
+                ctx.lineTo(mouseX, mouseY);
+                ctx.strokeStyle = '#e67e22';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 3]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // Dibujar nodos
+            nodes.forEach(node => {
+                drawNode(node);
+            });
+        }
+
+        // Dibujar un nodo individual
+        function drawNode(node) {
+            const x = node.x, y = node.y;
+            const w = node.width, h = node.height;
+
+            // Sombra
+            ctx.shadowColor = 'rgba(0,0,0,0.5)';
+            ctx.shadowBlur = 10;
+            ctx.shadowOffsetY = 3;
+
+            // Cuerpo
+            ctx.fillStyle = node.color;
+            ctx.strokeStyle = '#34495e';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(x, y, w, h, 10);
+            ctx.fill();
+            ctx.stroke();
+
+            // Cabecera
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.beginPath();
+            ctx.roundRect(x, y, w, 25, {tl:10, tr:10, br:0, bl:0});
+            ctx.fill();
+
+            // Título
+            ctx.shadowBlur = 0;
+            ctx.font = 'bold 14px Arial';
+            ctx.fillStyle = 'white';
+            ctx.fillText(node.label, x + 10, y + 18);
+
+            // Parámetros (solo para move)
+            if (node.type === 'move') {
+                ctx.font = '12px Arial';
+                ctx.fillStyle = '#ecf0f1';
+                ctx.fillText(node.direction, x + 10, y + 50);
+            }
+
+            // Puertos de entrada
+            const inputSpacing = (h - 30) / (node.inputs || 1);
+            for (let i = 0; i < node.inputs; i++) {
+                const portY = y + 30 + i * inputSpacing + inputSpacing/2;
+                ctx.beginPath();
+                ctx.arc(x, portY, 8, 0, 2*Math.PI);
+                ctx.fillStyle = '#2c3e50';
+                ctx.fill();
+                ctx.strokeStyle = '#ecf0f1';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.fillStyle = '#ecf0f1';
+                ctx.font = '10px Arial';
+                ctx.fillText('E' + i, x - 20, portY + 3);
+            }
+
+            // Puertos de salida
+            const outputSpacing = (h - 30) / (node.outputs || 1);
+            for (let i = 0; i < node.outputs; i++) {
+                const portY = y + 30 + i * outputSpacing + outputSpacing/2;
+                ctx.beginPath();
+                ctx.arc(x + w, portY, 8, 0, 2*Math.PI);
+                ctx.fillStyle = '#2c3e50';
+                ctx.fill();
+                ctx.strokeStyle = '#ecf0f1';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.fillStyle = '#ecf0f1';
+                ctx.font = '10px Arial';
+                ctx.fillText('S' + i, x + w + 10, portY + 3);
+            }
+
+            ctx.shadowBlur = 0;
+        }
+
+        // Helper para rectángulo redondeado
+        CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+            if (w < 2 * r) r = w / 2;
+            if (h < 2 * r) r = h / 2;
+            this.moveTo(x + r, y);
+            this.lineTo(x + w - r, y);
+            this.quadraticCurveTo(x + w, y, x + w, y + r);
+            this.lineTo(x + w, y + h - r);
+            this.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            this.lineTo(x + r, y + h);
+            this.quadraticCurveTo(x, y + h, x, y + h - r);
+            this.lineTo(x, y + r);
+            this.quadraticCurveTo(x, y, x + r, y);
+            return this;
+        };
+
+        // Obtener posición de un puerto de entrada
+        function getInputPos(node, index) {
+            const inputSpacing = (node.height - 30) / (node.inputs || 1);
+            const y = node.y + 30 + index * inputSpacing + inputSpacing/2;
+            return { x: node.x, y: y };
+        }
+
+        // Obtener posición de un puerto de salida
+        function getOutputPos(node, index) {
+            const outputSpacing = (node.height - 30) / (node.outputs || 1);
+            const y = node.y + 30 + index * outputSpacing + outputSpacing/2;
+            return { x: node.x + node.width, y: y };
+        }
+
+        // --- Eventos del mouse ---
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            mouseX = (e.clientX - rect.left) * scaleX;
+            mouseY = (e.clientY - rect.top) * scaleY;
+
+            // Detectar clic en puertos de salida (para iniciar conexión)
+            for (let node of nodes) {
+                for (let i = 0; i < node.outputs; i++) {
+                    const pos = getOutputPos(node, i);
+                    const dist = Math.hypot(mouseX - pos.x, mouseY - pos.y);
+                    if (dist < 10) {
+                        connectingFrom = { nodeId: node.id, outputIndex: i, x: pos.x, y: pos.y };
+                        draw();
+                        return;
+                    }
+                }
+            }
+
+            // Detectar clic en cabecera para arrastrar
+            for (let node of nodes.slice().reverse()) { // recorrer de atrás a adelante para seleccionar el superior
+                if (mouseX >= node.x && mouseX <= node.x + node.width &&
+                    mouseY >= node.y && mouseY <= node.y + 25) { // solo cabecera
+                    draggingNode = node;
+                    dragOffsetX = mouseX - node.x;
+                    dragOffsetY = mouseY - node.y;
+                    break;
+                }
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            mouseX = (e.clientX - rect.left) * scaleX;
+            mouseY = (e.clientY - rect.top) * scaleY;
+
+            if (draggingNode) {
+                draggingNode.x = mouseX - dragOffsetX;
+                draggingNode.y = mouseY - dragOffsetY;
+                draw();
+            } else if (connectingFrom) {
+                draw();
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (draggingNode) {
+                draggingNode = null;
+                draw();
+                return;
+            }
+
+            if (connectingFrom) {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                mouseX = (e.clientX - rect.left) * scaleX;
+                mouseY = (e.clientY - rect.top) * scaleY;
+
+                // Buscar puerto de entrada
+                let targetNode = null;
+                let targetInput = -1;
+                for (let node of nodes) {
+                    for (let i = 0; i < node.inputs; i++) {
+                        const pos = getInputPos(node, i);
+                        const dist = Math.hypot(mouseX - pos.x, mouseY - pos.y);
+                        if (dist < 10) {
+                            targetNode = node;
+                            targetInput = i;
+                            break;
+                        }
+                    }
+                    if (targetNode) break;
+                }
+
+                if (targetNode) {
+                    // Evitar conexiones a sí mismo o duplicadas (simplificado)
+                    const fromNodeId = connectingFrom.nodeId;
+                    const fromOutput = connectingFrom.outputIndex;
+
+                    // Eliminar conexión existente en ese puerto de entrada si la hay (simplificado)
+                    connections = connections.filter(c => !(c.toNode === targetNode.id && c.toInput === targetInput));
+
+                    connections.push({
+                        fromNode: fromNodeId,
+                        fromOutput: fromOutput,
+                        toNode: targetNode.id,
+                        toInput: targetInput
+                    });
+                }
+
+                connectingFrom = null;
+                draw();
+            }
+        });
+
+        // Prevenir el menú contextual en el canvas
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // --- Lógica de ejecución ---
+        async function executeGraph() {
+            // Buscar nodo de inicio
+            const startNode = nodes.find(n => n.type === 'start');
+            if (!startNode) {
+                messageDiv.innerText = '❌ No hay nodo de inicio';
+                return;
+            }
+
+            messageDiv.innerText = '▶️ Ejecutando...';
+            let currentNode = startNode;
+            let visited = new Set(); // para evitar bucles infinitos (simple)
+
+            while (currentNode) {
+                if (visited.has(currentNode.id)) {
+                    messageDiv.innerText = '⚠️ Bucle detectado, deteniendo';
+                    break;
+                }
+                visited.add(currentNode.id);
+
+                // Ejecutar acción del nodo actual
+                if (currentNode.type === 'move') {
+                    messageDiv.innerText = `🤖 Mover: ${currentNode.direction}`;
+                    // Simular movimiento (en un juego real cambiaría posición)
+                    await new Promise(resolve => setTimeout(resolve, 800));
+                } else if (currentNode.type === 'end') {
+                    messageDiv.innerText = '🏁 Llegaste al fin';
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    break;
+                }
+
+                // Buscar siguiente nodo por la primera conexión de salida
+                const outConn = connections.find(c => c.fromNode === currentNode.id);
+                if (outConn) {
+                    currentNode = nodes.find(n => n.id === outConn.toNode);
+                } else {
+                    currentNode = null;
+                }
+            }
+            if (!currentNode) messageDiv.innerText = '✅ Secuencia terminada';
+        }
+
+        function resetGraph() {
+            nodes = [];
+            connections = [];
+            nextNodeId = 0;
+            draw();
+            messageDiv.innerText = 'Editor reiniciado';
+        }
+
+        // Inicializar con algunos nodos de ejemplo
+        addNode('start');
+        addNode('move');
+        addNode('end');
+        // Ajustar posiciones
+        nodes[0].x = 200; nodes[0].y = 200;
+        nodes[1].x = 400; nodes[1].y = 200;
+        nodes[2].x = 600; nodes[2].y = 200;
+        // Conectar inicio->mover, mover->fin (opcional, se puede hacer manual)
+        connections.push({ fromNode: 0, fromOutput: 0, toNode: 1, toInput: 0 });
+        connections.push({ fromNode: 1, fromOutput: 0, toNode: 2, toInput: 0 });
+        draw();
+    </script>
+</body>
+</html>

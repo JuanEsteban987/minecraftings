@@ -1,149 +1,79 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <title>Survivor CS 2D - Build Mode</title>
-    <style>
-        body { margin: 0; background: #4a7c44; overflow: hidden; font-family: sans-serif; color: white; }
-        canvas { display: block; }
-        #menu { position: absolute; inset: 0; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
-        .btn { padding: 15px 30px; margin: 10px; cursor: pointer; border-radius: 10px; border: none; font-weight: bold; }
-        #hud { position: absolute; bottom: 20px; left: 20px; pointer-events: none; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 10px; }
-    </style>
-</head>
-<body>
-
-    <div id="menu">
-        <h1>SURVIVOR CS 2D</h1>
-        <input type="text" id="ip" value="127.0.0.1" style="padding:10px; width:200px; text-align:center;">
-        <p>Si localhost falla, usa 127.0.0.1</p>
-        <button class="btn" style="background:#e67e22" onclick="init('TR')">TERRORISTA</button>
-        <button class="btn" style="background:#3498db" onclick="init('CT')">CT</button>
-    </div>
-
-    <div id="hud">
-        [Q] Construir Pared (Piedra) | [W,A,S,D] Mover | [Click] Disparar
-    </div>
-
-    <canvas id="gameCanvas"></canvas>
+<body style="margin:0; overflow:hidden; background:#4a7c44;">
+    <canvas id="game"></canvas>
 
 <script>
-const canvas = document.getElementById('gameCanvas');
+const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+canvas.width = window.innerWidth; canvas.height = window.innerHeight;
 
-let me = { x: 100, y: 100, angle: 0, team: 'TR', moving: false, firing: false };
+let socket = new WebSocket("ws://127.0.0.1:8080");
+let me = { x: 100, y: 100, targetX: 100, targetY: 100, team: 'TR' };
 let players = {};
-let walls = []; // Guardamos objetos {x, y}
-let socket;
 const keys = {};
 
-function init(team) {
-    const ip = document.getElementById('ip').value;
-    me.team = team;
-    // Intentar conectar al servidor
-    socket = new WebSocket(`ws://${ip}:8080`);
+// Función LERP: Suaviza el movimiento (t es la velocidad de suavizado)
+const lerp = (start, end, t) => start + (end - start) * t;
 
-    socket.onopen = () => {
-        document.getElementById('menu').style.display = 'none';
-        loop();
-    };
-
-    socket.onmessage = (e) => {
-        if (e.data.startsWith("STATE:")) {
-            const parts = e.data.substring(6).split(";");
-            parts.forEach(p => {
-                if(!p) return;
-                const [id, d] = p.split("|");
-                const [x, y, ang, t, mov, fir] = d.split(",");
-                players[id] = { x:+x, y:+y, angle:+ang, team:t, moving:mov==="true", firing:fir==="true" };
-            });
-        } else if (e.data.startsWith("WALLS:")) {
-            walls = e.data.substring(6).split(";").map(w => {
-                const [x, y] = w.split(",");
-                return { x: +x, y: +y };
-            });
-        }
-    };
-}
-
-window.onkeydown = (e) => {
-    keys[e.key.toLowerCase()] = true;
-    // Tecla Q para construir
-    if (e.key.toLowerCase() === 'q') {
-        socket.send(`BUILD:${Math.round(me.x)},${Math.round(me.y)}`);
+socket.onmessage = (e) => {
+    if (e.data.startsWith("S:")) {
+        const parts = e.data.substring(2).split(";");
+        parts.forEach(p => {
+            if (!p) return;
+            const [id, data] = p.split("|");
+            const [x, y, team] = data.split(",");
+            
+            if (!players[id]) players[id] = { x: +x, y: +y, targetX: +x, targetY: +y, team };
+            else {
+                // En lugar de saltar a la posición, actualizamos el destino
+                players[id].targetX = +x;
+                players[id].targetY = +y;
+            }
+        });
     }
 };
-window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
-window.onmousemove = (e) => me.angle = Math.atan2(e.clientY - me.y, e.clientX - me.x);
-window.onmousedown = () => me.firing = true;
-window.onmouseup = () => me.firing = false;
 
-function checkCollision(nx, ny) {
-    // Colisión con paredes de piedra (tamaño 40x40)
-    for (let w of walls) {
-        if (nx > w.x - 30 && nx < w.x + 30 && ny > w.y - 30 && ny < w.y + 30) return true;
-    }
-    return false;
-}
+function update() {
+    if (keys['w']) me.y -= 4; if (keys['s']) me.y += 4;
+    if (keys['a']) me.x -= 4; if (keys['d']) me.x += 4;
 
-function loop() {
-    ctx.fillStyle = "#4a7c44";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Dibujar Paredes de Piedra
-    walls.forEach(w => {
-        ctx.fillStyle = "#7f8c8d"; // Color Piedra
-        ctx.strokeStyle = "#2c3e50";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.roundRect(w.x - 20, w.y - 20, 40, 40, 5);
-        ctx.fill(); ctx.stroke();
-        // Detalle de piedra
-        ctx.fillStyle = "#95a5a6";
-        ctx.fillRect(w.x - 10, w.y - 10, 10, 10);
-    });
-
-    // Movimiento con colisión
-    let nextX = me.x, nextY = me.y;
-    if (keys['w']) nextY -= 4; if (keys['s']) nextY += 4;
-    if (keys['a']) nextX -= 4; if (keys['d']) nextX += 4;
-
-    if (!checkCollision(nextX, nextY)) {
-        me.x = nextX; me.y = nextY;
-        me.moving = (nextX !== me.x || nextY !== me.y);
-    }
-
-    // Dibujar jugadores estilo Survivor.io
-    Object.keys(players).forEach(id => {
-        const p = players[id];
-        drawPlayer(p);
-    });
-    drawPlayer(me);
-
-    // Red
+    // Enviamos nuestra posición al servidor
     if (socket.readyState === 1) {
-        socket.send(`UPDATE:${me.x},${me.y},${me.angle},${me.team},${me.moving},${me.firing}`);
+        socket.send(`U:${Math.round(me.x)},${Math.round(me.y)},${me.team}`);
     }
 
-    requestAnimationFrame(loop);
+    // Suavizamos el movimiento de los OTROS jugadores
+    for (let id in players) {
+        players[id].x = lerp(players[id].x, players[id].targetX, 0.2);
+        players[id].y = lerp(players[id].y, players[id].targetY, 0.2);
+    }
 }
 
-function drawPlayer(p) {
-    ctx.save();
-    ctx.translate(p.x, p.y);
-    // Cuerpo bean
-    ctx.fillStyle = p.team === 'CT' ? '#3498db' : '#e67e22';
-    ctx.beginPath();
-    ctx.roundRect(-15, -20, 30, 35, 10);
-    ctx.fill();
-    ctx.stroke();
-    // Ojos
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Dibujar a otros (Interpolados)
+    for (let id in players) {
+        ctx.fillStyle = players[id].team === 'CT' ? '#3498db' : '#e67e22';
+        ctx.beginPath();
+        ctx.roundRect(players[id].x - 15, players[id].y - 20, 30, 35, 10);
+        ctx.fill();
+    }
+
+    // Dibujarme a mí (Local - Respuesta inmediata)
     ctx.fillStyle = "white";
-    ctx.beginPath(); ctx.arc(-5, -8, 4, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(5, -8, 4, 0, Math.PI*2); ctx.fill();
-    ctx.restore();
+    ctx.beginPath();
+    ctx.roundRect(me.x - 15, me.y - 20, 30, 35, 10);
+    ctx.fill();
+
+    update();
+    requestAnimationFrame(draw);
 }
+
+window.onkeydown = (e) => keys[e.key.toLowerCase()] = true;
+window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
+draw();
 </script>
 </body>
 </html>
